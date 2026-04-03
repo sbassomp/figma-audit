@@ -1,0 +1,26 @@
+project: ~/dev/medcorp/MedExchange
+figma_url: "https://www.figma.com/design/6kTFQMSueuk1dSDgiuMur9/MedCorp---MedCourse"
+app_url: "https://medexchange.kaseilabs.com"
+output: ./output
+
+viewport:
+  width: 390
+  height: 844
+  device_scale_factor: 1
+
+figma:
+  cache_dir: figma_raw
+  request_delay: 3.0
+  batch_size: 8
+  retry_wait_default: 60
+  max_retries: 5
+
+thresholds:
+  color_delta_e: 5.0
+  font_size_tolerance: 2
+  spacing_tolerance: 4
+
+# Second account to seed "available" courses (visible to the main test user)
+seed_account:
+  email: "test-deposant@medexchange.test"
+  otp: "1234"

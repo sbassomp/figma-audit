@@ -64,14 +64,18 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
         pass  # Handled by the caller
 
 
-def _setup_test_data(app_url: str, test_data: dict) -> list[str]:
-    """Populate the app with test courses via API. Returns list of created course IDs."""
+def _setup_test_data(app_url: str, test_data: dict, seed_account: dict | None = None) -> list[str]:
+    """Populate the app with test courses via API. Returns list of created course IDs.
+
+    Uses seed_account (a different user) so courses appear in "available" for the main user.
+    Falls back to main test_data credentials if no seed_account.
+    """
     import requests
     from datetime import datetime, timedelta, timezone
 
     base = app_url.rstrip("/") + "/api"
-    email = test_data.get("email")
-    otp = test_data.get("otp", "1234")
+    email = (seed_account or {}).get("email") or test_data.get("email")
+    otp = (seed_account or {}).get("otp") or test_data.get("otp", "1234")
 
     console.print("  [bold]Setting up test data via API...[/bold]")
 
@@ -441,8 +445,9 @@ async def _run_async(config: Config) -> Path:
 
     # Populate app with test data via API (if credentials available)
     created_course_ids = []
-    if test_data.get("email") and app_url:
-        created_course_ids = _setup_test_data(app_url, test_data)
+    seed_account = config.seed_account.model_dump() if config.seed_account.email else None
+    if (seed_account or test_data.get("email")) and app_url:
+        created_course_ids = _setup_test_data(app_url, test_data, seed_account=seed_account)
 
     # Launch browser
     async with async_playwright() as pw:
@@ -500,7 +505,8 @@ async def _run_async(config: Config) -> Path:
 
     # Cleanup test data
     if created_course_ids:
-        _cleanup_test_data(app_url, test_data, created_course_ids)
+        cleanup_data = seed_account if seed_account else test_data
+        _cleanup_test_data(app_url, cleanup_data, created_course_ids)
 
     # Save results
     captures_path = output_dir / "app_captures.json"
