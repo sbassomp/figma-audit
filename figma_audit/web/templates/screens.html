@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Ecrans Figma - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header flex justify-between items-center">
+  <div>
+    <h2>Ecrans Figma</h2>
+    <p class="subtitle">{{ project.name }} - {{ screens | length }} ecran(s)</p>
+  </div>
+  <div class="flex gap-1">
+    <a href="/projects/{{ project.slug }}/screens?status=current" class="btn btn-sm {% if filter_status == 'current' %}btn-primary{% endif %}">Current</a>
+    <a href="/projects/{{ project.slug }}/screens?status=obsolete" class="btn btn-sm {% if filter_status == 'obsolete' %}btn-primary{% endif %}">Obsolete</a>
+    <a href="/projects/{{ project.slug }}/screens" class="btn btn-sm {% if not filter_status %}btn-primary{% endif %}">Tous</a>
+  </div>
+</div>
+
+{% if not screens %}
+<div class="empty-state">
+  <h3>Aucun ecran</h3>
+  <p>Lancez un run pour importer les ecrans Figma.</p>
+</div>
+{% else %}
+<div class="screen-grid">
+  {% for s in screens %}
+  <div class="screen-card" id="screen-{{ s.id }}">
+    {% if s.image_path %}
+    <img src="/files/{{ project.slug }}/{{ s.image_path }}" alt="{{ s.name }}" loading="lazy">
+    {% else %}
+    <div style="height: 220px; background: var(--surface2); display: flex; align-items: center; justify-content: center;">
+      <span class="text-muted text-sm">Pas d'image</span>
+    </div>
+    {% endif %}
+    <div class="screen-info">
+      <div class="screen-name" title="{{ s.name }}">{{ s.name }}</div>
+      <div class="screen-meta">
+        {{ s.width | int }}x{{ s.height | int }}
+        {% if s.mapped_route %}
+        <span class="mono">{{ s.mapped_route }}</span>
+        {% endif %}
+      </div>
+      <div class="flex justify-between items-center mt-1">
+        <span class="badge badge-{{ s.status }}">{{ s.status }}</span>
+        {% if s.status == 'current' %}
+        <button class="btn btn-sm"
+                hx-patch="/api/projects/{{ project.slug }}/screens/{{ s.id }}"
+                hx-vals='{"status": "obsolete"}'
+                hx-target="#screen-{{ s.id }}"
+                hx-swap="outerHTML"
+                hx-confirm="Marquer cet ecran comme obsolete ?">
+          Obsolete
+        </button>
+        {% elif s.status == 'obsolete' %}
+        <button class="btn btn-sm"
+                hx-patch="/api/projects/{{ project.slug }}/screens/{{ s.id }}"
+                hx-vals='{"status": "current"}'
+                hx-target="#screen-{{ s.id }}"
+                hx-swap="outerHTML"
+                hx-confirm="Remettre cet ecran en current ?">
+          Restaurer
+        </button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

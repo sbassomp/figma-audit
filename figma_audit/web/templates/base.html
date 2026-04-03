@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}figma-audit{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js"></script>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <h1>figma-audit</h1>
+    <span class="version">v0.1.0</span>
+  </div>
+  <nav>
+    <a href="/" class="{% if active_nav == 'dashboard' %}active{% endif %}">Dashboard</a>
+    <div class="section-title">Projets</div>
+    {% for p in nav_projects or [] %}
+    <a href="/projects/{{ p.slug }}" class="{% if active_project == p.slug %}active{% endif %}">{{ p.name }}</a>
+    {% endfor %}
+    <a href="/projects/new" class="{% if active_nav == 'new_project' %}active{% endif %}">+ Nouveau projet</a>
+  </nav>
+</aside>
+
+<main class="main">
+  {% block content %}{% endblock %}
+</main>
+
+</body>
+</html>

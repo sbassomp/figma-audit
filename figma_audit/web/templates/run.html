@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Run #{{ run.id }} - {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header flex justify-between items-center">
+  <div>
+    <h2>Run #{{ run.id }}</h2>
+    <p class="subtitle">{{ project.name }} - {{ run.created_at[:16] }}</p>
+  </div>
+  <span class="badge badge-{{ run.status }}" style="font-size: 0.85rem; padding: 0.3rem 0.8rem;">{{ run.status }}</span>
+</div>
+
+{% if run.error %}
+<div class="card" style="border-color: var(--critical);">
+  <h3 style="color: var(--critical);">Erreur</h3>
+  <pre class="text-sm" style="color: var(--critical); white-space: pre-wrap;">{{ run.error }}</pre>
+</div>
+{% endif %}
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.total_captures }}</div>
+    <div class="stat-label">Pages capturees</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.total_discrepancies }}</div>
+    <div class="stat-label">Ecarts total</div>
+  </div>
+  <div class="stat-card stat-critical">
+    <div class="stat-value">{{ stats.by_severity.critical or 0 }}</div>
+    <div class="stat-label">Critical</div>
+  </div>
+  <div class="stat-card stat-important">
+    <div class="stat-value">{{ stats.by_severity.important or 0 }}</div>
+    <div class="stat-label">Important</div>
+  </div>
+  <div class="stat-card stat-minor">
+    <div class="stat-value">{{ stats.by_severity.minor or 0 }}</div>
+    <div class="stat-label">Minor</div>
+  </div>
+</div>
+
+{% if discrepancies %}
+<div class="card">
+  <div class="flex justify-between items-center mb-1">
+    <h3>Ecarts ({{ discrepancies | length }})</h3>
+    <div class="flex gap-1">
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity=critical" class="btn btn-sm {% if filter_severity == 'critical' %}btn-primary{% endif %}">Critical</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity=important" class="btn btn-sm {% if filter_severity == 'important' %}btn-primary{% endif %}">Important</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}" class="btn btn-sm {% if not filter_severity %}btn-primary{% endif %}">Tous</a>
+    </div>
+  </div>
+
+  {% for d in discrepancies %}
+  <div class="discrepancy {{ d.severity }}" id="disc-{{ d.id }}">
+    <div class="discrepancy-header">
+      <span class="text-xs text-muted mono">{{ d.category }} - {{ d.page_id }} ({{ d.route }})</span>
+      <div class="flex gap-1 items-center">
+        <span class="badge badge-{{ d.status }}">{{ d.status }}</span>
+        <span class="badge badge-{{ d.severity }}">{{ d.severity }}</span>
+      </div>
+    </div>
+    <div class="discrepancy-desc">{{ d.description }}</div>
+    {% if d.figma_value or d.app_value %}
+    <div class="discrepancy-values">
+      {% if d.figma_value %}<span>Figma: <code>{{ d.figma_value }}</code></span>{% endif %}
+      {% if d.app_value %}<span>App: <code>{{ d.app_value }}</code></span>{% endif %}
+    </div>
+    {% endif %}
+    {% if d.status == 'open' %}
+    <div class="discrepancy-actions">
+      <button class="btn btn-sm"
+              hx-patch="/api/projects/{{ project.slug }}/discrepancies/{{ d.id }}"
+              hx-vals='{"status": "ignored"}'
+              hx-target="#disc-{{ d.id }}"
+              hx-swap="outerHTML">
+        Ignorer
+      </button>
+      <button class="btn btn-sm"
+              hx-patch="/api/projects/{{ project.slug }}/discrepancies/{{ d.id }}"
+              hx-vals='{"status": "wontfix"}'
+              hx-target="#disc-{{ d.id }}"
+              hx-swap="outerHTML">
+        Won't fix
+      </button>
+      <button class="btn btn-sm"
+              hx-patch="/api/projects/{{ project.slug }}/discrepancies/{{ d.id }}"
+              hx-vals='{"status": "fixed"}'
+              hx-target="#disc-{{ d.id }}"
+              hx-swap="outerHTML">
+        Corrige
+      </button>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

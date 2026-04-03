@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} - figma-audit{% endblock %}
+
+{% block content %}
+<div class="page-header flex justify-between items-center">
+  <div>
+    <h2>{{ project.name }}</h2>
+    <p class="subtitle">{{ project.app_url or 'Pas d\'URL configuree' }}</p>
+  </div>
+  <div class="flex gap-1">
+    <a href="/projects/{{ project.slug }}/screens" class="btn">Ecrans Figma</a>
+    <form hx-post="/api/projects/{{ project.slug }}/runs" hx-target="body" hx-swap="none"
+          hx-on::after-request="if(event.detail.successful) window.location.reload()">
+      <button type="submit" class="btn btn-primary">Lancer un run</button>
+    </form>
+  </div>
+</div>
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{ runs | length }}</div>
+    <div class="stat-label">Runs</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ screens_count }}</div>
+    <div class="stat-label">Ecrans Figma</div>
+  </div>
+  {% if last_stats %}
+  <div class="stat-card stat-critical">
+    <div class="stat-value">{{ last_stats.by_severity.critical or 0 }}</div>
+    <div class="stat-label">Critical</div>
+  </div>
+  <div class="stat-card stat-important">
+    <div class="stat-value">{{ last_stats.by_severity.important or 0 }}</div>
+    <div class="stat-label">Important</div>
+  </div>
+  <div class="stat-card stat-minor">
+    <div class="stat-value">{{ last_stats.by_severity.minor or 0 }}</div>
+    <div class="stat-label">Minor</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Historique des runs</h3>
+  {% if not runs %}
+  <div class="empty-state">
+    <p>Aucun run. Lancez votre premier audit.</p>
+  </div>
+  {% else %}
+  <div class="timeline">
+    {% for run in runs %}
+    <div class="timeline-item {{ run.status }}">
+      <div class="flex justify-between items-center">
+        <div>
+          <a href="/projects/{{ project.slug }}/runs/{{ run.id }}" style="color: var(--text); text-decoration: none; font-weight: 600;">
+            Run #{{ run.id }}
+          </a>
+          <span class="badge badge-{{ run.status }}">{{ run.status }}</span>
+          {% if run.current_phase and run.status == 'running' %}
+          <span class="text-xs text-muted">{{ run.current_phase }}</span>
+          {% endif %}
+        </div>
+        <span class="text-xs text-muted">{{ run.created_at[:16] }}</span>
+      </div>
+      {% if run.stats %}
+      <div class="text-xs text-muted mt-1">
+        {{ run.stats.total_discrepancies or 0 }} ecarts
+        ({{ run.stats.by_severity.critical or 0 }}C / {{ run.stats.by_severity.important or 0 }}I / {{ run.stats.by_severity.minor or 0 }}m)
+      </div>
+      {% endif %}
+      {% if run.error %}
+      <div class="text-xs" style="color: var(--critical); margin-top: 0.3rem;">{{ run.error[:100] }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
