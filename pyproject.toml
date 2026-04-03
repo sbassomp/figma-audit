@@ -1,0 +1,46 @@
+[project]
+name = "figma-audit"
+version = "0.1.0"
+description = "CLI tool for semantic comparison between Figma designs and deployed web applications"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "anthropic>=0.40",
+    "playwright>=1.40",
+    "requests>=2.31",
+    "Pillow>=10.0",
+    "click>=8.1",
+    "pydantic>=2.0",
+    "Jinja2>=3.1",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "ruff>=0.1",
+    "mypy>=1.0",
+]
+
+[project.scripts]
+figma-audit = "figma_audit.__main__:cli"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["figma_audit*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

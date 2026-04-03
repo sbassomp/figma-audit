@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Figma Audit Report -- {{ file_name }}</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #232733;
+    --border: #2e3344;
+    --text: #e1e4ed;
+    --text-muted: #8b90a0;
+    --critical: #ef4444;
+    --critical-bg: #2d1618;
+    --important: #f59e0b;
+    --important-bg: #2d2514;
+    --minor: #3b82f6;
+    --minor-bg: #14202d;
+    --good: #22c55e;
+    --accent: #818cf8;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 2rem;
+    margin-bottom: 2rem;
+  }
+  header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 0.25rem; }
+  header .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+
+  /* Executive Summary */
+  .summary-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .summary-card h2 { font-size: 1.2rem; margin-bottom: 1rem; color: var(--accent); }
+  .summary-text { color: var(--text-muted); line-height: 1.8; }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    text-align: center;
+  }
+  .stat-value { font-size: 2rem; font-weight: 700; }
+  .stat-label { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; }
+  .stat-critical .stat-value { color: var(--critical); }
+  .stat-important .stat-value { color: var(--important); }
+  .stat-minor .stat-value { color: var(--minor); }
+  .stat-good .stat-value { color: var(--good); }
+
+  /* Category bars */
+  .category-bars { margin-bottom: 2rem; }
+  .category-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .category-name {
+    width: 180px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    text-align: right;
+  }
+  .category-fill {
+    height: 24px;
+    background: var(--accent);
+    border-radius: 4px;
+    min-width: 2px;
+    transition: width 0.3s;
+  }
+  .category-count { font-size: 0.85rem; font-weight: 600; }
+
+  /* Screen comparison */
+  .screen-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+  }
+  .screen-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+  .screen-header:hover { background: var(--surface2); }
+  .screen-title { font-weight: 600; }
+  .screen-route { color: var(--text-muted); font-size: 0.85rem; font-family: monospace; }
+  .fidelity-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .fidelity-excellent { background: #14532d; color: #86efac; }
+  .fidelity-good { background: #1a3a1a; color: #86efac; }
+  .fidelity-acceptable { background: #2d2514; color: #fcd34d; }
+  .fidelity-poor { background: #2d1618; color: #fca5a5; }
+  .fidelity-error { background: #2d1618; color: #fca5a5; }
+
+  .screen-body { padding: 1.5rem; display: none; }
+  .screen-body.open { display: block; }
+
+  .screen-summary {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1.25rem;
+    font-style: italic;
+  }
+
+  /* Side by side images */
+  .side-by-side {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .image-col { text-align: center; }
+  .image-col img {
+    max-width: 100%;
+    max-height: 500px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    object-fit: contain;
+    background: #000;
+  }
+  .image-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Discrepancy list */
+  .discrepancy {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    border-left: 3px solid;
+  }
+  .discrepancy.critical { border-left-color: var(--critical); background: var(--critical-bg); }
+  .discrepancy.important { border-left-color: var(--important); background: var(--important-bg); }
+  .discrepancy.minor { border-left-color: var(--minor); background: var(--minor-bg); }
+
+  .discrepancy-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  .severity-tag {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+  .severity-tag.critical { background: var(--critical); color: #fff; }
+  .severity-tag.important { background: var(--important); color: #000; }
+  .severity-tag.minor { background: var(--minor); color: #fff; }
+
+  .discrepancy-category {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: monospace;
+  }
+  .discrepancy-desc { font-size: 0.9rem; margin-bottom: 0.5rem; }
+  .discrepancy-values {
+    display: flex;
+    gap: 1.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .discrepancy-values code {
+    background: var(--surface2);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+  }
+
+  /* Overview table */
+  .overview-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 2rem;
+  }
+  .overview-table th, .overview-table td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+  .overview-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .overview-table tr:hover { background: var(--surface2); }
+  .count-badge {
+    display: inline-block;
+    min-width: 22px;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+  }
+  .count-badge.critical { background: var(--critical-bg); color: var(--critical); }
+  .count-badge.important { background: var(--important-bg); color: var(--important); }
+  .count-badge.minor { background: var(--minor-bg); color: var(--minor); }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>Figma Audit Report</h1>
+  <div class="subtitle">{{ file_name }} -- {{ date }}</div>
+</header>
+
+<!-- Executive Summary -->
+<div class="summary-card">
+  <h2>Resume executif</h2>
+  <div class="summary-text">{{ executive_summary }}</div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.total_screens }}</div>
+    <div class="stat-label">Ecrans compares</div>
+  </div>
+  <div class="stat-card stat-critical">
+    <div class="stat-value">{{ stats.by_severity.critical }}</div>
+    <div class="stat-label">Critical</div>
+  </div>
+  <div class="stat-card stat-important">
+    <div class="stat-value">{{ stats.by_severity.important }}</div>
+    <div class="stat-label">Important</div>
+  </div>
+  <div class="stat-card stat-minor">
+    <div class="stat-value">{{ stats.by_severity.minor }}</div>
+    <div class="stat-label">Minor</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">{{ stats.total_discrepancies }}</div>
+    <div class="stat-label">Total ecarts</div>
+  </div>
+</div>
+
+<!-- Category breakdown -->
+{% if stats.by_category %}
+<div class="summary-card">
+  <h2>Ecarts par categorie</h2>
+  <div class="category-bars">
+    {% for cat, count in stats.by_category | dictsort(by='value', reverse=true) %}
+    <div class="category-bar">
+      <div class="category-name">{{ cat }}</div>
+      <div class="category-fill" style="width: {{ (count / stats.max_category * 100) | int }}%;"></div>
+      <div class="category-count">{{ count }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Overview table -->
+<div class="summary-card">
+  <h2>Vue d'ensemble</h2>
+  <table class="overview-table">
+    <thead>
+      <tr>
+        <th>Ecran Figma</th>
+        <th>Route</th>
+        <th>Fidelite</th>
+        <th>Critical</th>
+        <th>Important</th>
+        <th>Minor</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for comp in comparisons %}
+      <tr>
+        <td>{{ comp.figma_screen }}</td>
+        <td><code>{{ comp.route }}</code></td>
+        <td><span class="fidelity-badge fidelity-{{ comp.overall_fidelity }}">{{ comp.overall_fidelity }}</span></td>
+        <td><span class="count-badge critical">{{ comp.severity_counts.critical }}</span></td>
+        <td><span class="count-badge important">{{ comp.severity_counts.important }}</span></td>
+        <td><span class="count-badge minor">{{ comp.severity_counts.minor }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Detail per screen -->
+{% for comp in comparisons %}
+<div class="screen-section">
+  <div class="screen-header" onclick="this.nextElementSibling.classList.toggle('open')">
+    <div>
+      <span class="screen-title">{{ comp.figma_screen }}</span>
+      <span class="screen-route">{{ comp.route }}</span>
+    </div>
+    <span class="fidelity-badge fidelity-{{ comp.overall_fidelity }}">
+      {{ comp.overall_fidelity }} -- {{ comp.discrepancies | length }} ecarts
+    </span>
+  </div>
+  <div class="screen-body{% if comp.overall_fidelity in ['poor', 'acceptable'] and loop.index <= 3 %} open{% endif %}">
+    <div class="screen-summary">{{ comp.summary }}</div>
+
+    <div class="side-by-side">
+      <div class="image-col">
+        <div class="image-label">Figma (reference)</div>
+        {% if comp.figma_image_b64 %}
+        <img src="data:image/png;base64,{{ comp.figma_image_b64 }}" alt="Figma: {{ comp.figma_screen }}">
+        {% else %}
+        <div style="padding:2rem;color:var(--text-muted);">Image non disponible</div>
+        {% endif %}
+      </div>
+      <div class="image-col">
+        <div class="image-label">Application</div>
+        {% if comp.app_image_b64 %}
+        <img src="data:image/png;base64,{{ comp.app_image_b64 }}" alt="App: {{ comp.page_id }}">
+        {% else %}
+        <div style="padding:2rem;color:var(--text-muted);">Image non disponible</div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% for d in comp.discrepancies %}
+    <div class="discrepancy {{ d.severity }}">
+      <div class="discrepancy-header">
+        <span class="discrepancy-category">{{ d.category }}</span>
+        <span class="severity-tag {{ d.severity }}">{{ d.severity }}</span>
+      </div>
+      <div class="discrepancy-desc">{{ d.description }}</div>
+      {% if d.figma_value or d.app_value %}
+      <div class="discrepancy-values">
+        {% if d.figma_value %}<span>Figma: <code>{{ d.figma_value }}</code></span>{% endif %}
+        {% if d.app_value %}<span>App: <code>{{ d.app_value }}</code></span>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+<footer>
+  Genere par figma-audit v0.1.0 -- {{ date }}
+</footer>
+
+</div>
+</body>
+</html>

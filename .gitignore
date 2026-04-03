@@ -1,0 +1,28 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Output (generated data, not source)
+output/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+
+# Tools config (not project code)
+tools.yaml
+
+# Debug screenshots
+debug-*.png
