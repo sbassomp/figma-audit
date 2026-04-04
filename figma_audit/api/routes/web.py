@@ -210,6 +210,13 @@ def run_detail(
         by_severity[d.severity] = by_severity.get(d.severity, 0) + 1
         by_category[d.category] = by_category.get(d.category, 0) + 1
 
+    # Group discrepancies by page_id for comparison links
+    pages_with_discs = {}
+    for d in all_discs:
+        if d.page_id not in pages_with_discs:
+            pages_with_discs[d.page_id] = {"count": 0, "screen_id": d.screen_id, "fidelity": d.overall_fidelity}
+        pages_with_discs[d.page_id]["count"] += 1
+
     return templates.TemplateResponse(request, "run.html", context={
         "active_project": slug,
         "nav_projects": _nav_projects(session),
@@ -223,10 +230,63 @@ def run_detail(
         },
         "discrepancies": discrepancies,
         "filter_severity": severity,
+        "pages_with_discs": pages_with_discs,
         "stats": {
             "total_discrepancies": len(all_discs),
             "total_captures": len(captures),
             "by_severity": by_severity,
             "by_category": by_category,
         },
+    })
+
+
+@router.get("/projects/{slug}/runs/{run_id}/compare/{page_id}", response_class=HTMLResponse)
+def comparison_view(
+    request: Request, slug: str, run_id: int, page_id: str,
+    session: Session = Depends(get_session),
+):
+    project = session.exec(select(Project).where(Project.slug == slug)).first()
+    if not project:
+        return RedirectResponse("/")
+
+    run = session.exec(
+        select(Run).where(Run.id == run_id, Run.project_id == project.id)
+    ).first()
+    if not run:
+        return RedirectResponse(f"/projects/{slug}")
+
+    # Get discrepancies for this page
+    discs = session.exec(
+        select(Discrepancy).where(
+            Discrepancy.run_id == run_id,
+            Discrepancy.page_id == page_id,
+        ).order_by(Discrepancy.severity)
+    ).all()
+
+    fidelity = discs[0].overall_fidelity if discs else "unknown"
+
+    # Get the screen
+    screen_id = discs[0].screen_id if discs else None
+    screen = session.get(Screen, screen_id) if screen_id else None
+
+    # Get the capture
+    from figma_audit.db.models import Capture
+    capture = session.exec(
+        select(Capture).where(Capture.run_id == run_id, Capture.page_id == page_id)
+    ).first()
+
+    if not screen:
+        screen = type("FakeScreen", (), {"name": page_id, "image_path": None})()
+    if not capture:
+        capture = type("FakeCapture", (), {"page_id": page_id, "route": "", "screenshot_path": None})()
+
+    return templates.TemplateResponse(request, "comparison.html", context={
+        "active_project": slug,
+        "nav_projects": _nav_projects(session),
+        "project": project,
+        "run_id": run_id,
+        "screen": screen,
+        "capture": capture,
+        "discrepancies": discs,
+        "fidelity": fidelity,
     })

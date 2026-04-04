@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ screen.name }} vs {{ capture.page_id }} - figma-audit{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div class="flex justify-between items-center">
+    <div>
+      <h2>{{ screen.name }}</h2>
+      <p class="subtitle">
+        {{ capture.route }}
+        <span class="fidelity-badge fidelity-{{ fidelity }}">{{ fidelity }}</span>
+        <span class="text-muted">- {{ discrepancies | length }} ecart(s)</span>
+      </p>
+    </div>
+    <a href="/projects/{{ project.slug }}/runs/{{ run_id }}" class="btn">Retour au run</a>
+  </div>
+</div>
+
+<div class="side-by-side">
+  <div class="image-col">
+    <div class="image-label">Figma (reference)</div>
+    {% if screen.image_path %}
+    <img src="/files/{{ project.slug }}/{{ screen.image_path }}" alt="Figma: {{ screen.name }}">
+    {% else %}
+    <div class="card" style="height:400px;display:flex;align-items:center;justify-content:center;">
+      <span class="text-muted">Image non disponible</span>
+    </div>
+    {% endif %}
+  </div>
+  <div class="image-col">
+    <div class="image-label">Application</div>
+    {% if capture.screenshot_path %}
+    <img src="/files/{{ project.slug }}/{{ capture.screenshot_path }}" alt="App: {{ capture.page_id }}">
+    {% else %}
+    <div class="card" style="height:400px;display:flex;align-items:center;justify-content:center;">
+      <span class="text-muted">Image non disponible</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h3>Ecarts ({{ discrepancies | length }})</h3>
+
+  {% for d in discrepancies %}
+  <div class="discrepancy {{ d.severity }}" id="disc-{{ d.id }}">
+    <div class="discrepancy-header">
+      <span class="text-xs text-muted mono">{{ d.category }}{% if d.location %} - {{ d.location }}{% endif %}</span>
+      <div class="flex gap-1 items-center">
+        <span class="badge badge-{{ d.status }}">{{ d.status }}</span>
+        <span class="badge badge-{{ d.severity }}">{{ d.severity }}</span>
+      </div>
+    </div>
+    <div class="discrepancy-desc">{{ d.description }}</div>
+    {% if d.figma_value or d.app_value %}
+    <div class="discrepancy-values">
+      {% if d.figma_value %}<span>Figma: <code>{{ d.figma_value }}</code></span>{% endif %}
+      {% if d.app_value %}<span>App: <code>{{ d.app_value }}</code></span>{% endif %}
+    </div>
+    {% endif %}
+    {% if d.status == 'open' %}
+    <div class="discrepancy-actions">
+      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/ignored" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Ignorer</button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/wontfix" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Won't fix</button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/fixed" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Corrige</button>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

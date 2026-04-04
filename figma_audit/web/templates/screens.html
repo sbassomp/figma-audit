@@ -42,8 +42,7 @@
         <span class="badge badge-{{ s.status }}">{{ s.status }}</span>
         {% if s.status == 'current' %}
         <button class="btn btn-sm"
-                hx-patch="/api/projects/{{ project.slug }}/screens/{{ s.id }}"
-                hx-vals='{"status": "obsolete"}'
+                hx-post="/htmx/projects/{{ project.slug }}/screens/{{ s.id }}/status/obsolete"
                 hx-target="#screen-{{ s.id }}"
                 hx-swap="outerHTML"
                 hx-confirm="Marquer cet ecran comme obsolete ?">
@@ -51,11 +50,9 @@
         </button>
         {% elif s.status == 'obsolete' %}
         <button class="btn btn-sm"
-                hx-patch="/api/projects/{{ project.slug }}/screens/{{ s.id }}"
-                hx-vals='{"status": "current"}'
+                hx-post="/htmx/projects/{{ project.slug }}/screens/{{ s.id }}/status/current"
                 hx-target="#screen-{{ s.id }}"
-                hx-swap="outerHTML"
-                hx-confirm="Remettre cet ecran en current ?">
+                hx-swap="outerHTML">
           Restaurer
         </button>
         {% endif %}

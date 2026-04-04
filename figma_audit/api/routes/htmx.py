@@ -1,0 +1,121 @@
+"""htmx-specific endpoints returning HTML fragments."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
+from sqlmodel import Session, select
+
+from figma_audit.api.deps import get_project, get_session
+from figma_audit.db.models import Discrepancy, Project, Screen
+
+router = APIRouter(prefix="/htmx/projects/{slug}", tags=["htmx"])
+
+
+def _disc_card_html(d: Discrepancy, slug: str) -> str:
+    """Render a single discrepancy card as HTML fragment."""
+    values_html = ""
+    if d.figma_value or d.app_value:
+        parts = []
+        if d.figma_value:
+            parts.append(f'<span>Figma: <code>{d.figma_value}</code></span>')
+        if d.app_value:
+            parts.append(f'<span>App: <code>{d.app_value}</code></span>')
+        values_html = f'<div class="discrepancy-values">{"".join(parts)}</div>'
+
+    actions_html = ""
+    if d.status == "open":
+        actions_html = f"""<div class="discrepancy-actions">
+      <button class="btn btn-sm" hx-post="/htmx/projects/{slug}/discrepancies/{d.id}/status/ignored" hx-target="#disc-{d.id}" hx-swap="outerHTML">Ignorer</button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{slug}/discrepancies/{d.id}/status/wontfix" hx-target="#disc-{d.id}" hx-swap="outerHTML">Won't fix</button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{slug}/discrepancies/{d.id}/status/fixed" hx-target="#disc-{d.id}" hx-swap="outerHTML">Corrige</button>
+    </div>"""
+
+    return f"""<div class="discrepancy {d.severity}" id="disc-{d.id}">
+    <div class="discrepancy-header">
+      <span class="text-xs text-muted mono">{d.category} - {d.page_id} ({d.route})</span>
+      <div class="flex gap-1 items-center">
+        <span class="badge badge-{d.status}">{d.status}</span>
+        <span class="badge badge-{d.severity}">{d.severity}</span>
+      </div>
+    </div>
+    <div class="discrepancy-desc">{d.description}</div>
+    {values_html}
+    {actions_html}
+  </div>"""
+
+
+def _screen_card_html(s: Screen, slug: str) -> str:
+    """Render a single screen card as HTML fragment."""
+    if s.image_path:
+        img = f'<img src="/files/{slug}/{s.image_path}" alt="{s.name}" loading="lazy">'
+    else:
+        img = '<div style="height:220px;background:var(--surface2);display:flex;align-items:center;justify-content:center;"><span class="text-muted text-sm">Pas d\'image</span></div>'
+
+    mapped = f'<span class="mono">{s.mapped_route}</span>' if s.mapped_route else ""
+
+    if s.status == "current":
+        btn = f'<button class="btn btn-sm" hx-post="/htmx/projects/{slug}/screens/{s.id}/status/obsolete" hx-target="#screen-{s.id}" hx-swap="outerHTML" hx-confirm="Marquer cet ecran comme obsolete ?">Obsolete</button>'
+    elif s.status == "obsolete":
+        btn = f'<button class="btn btn-sm" hx-post="/htmx/projects/{slug}/screens/{s.id}/status/current" hx-target="#screen-{s.id}" hx-swap="outerHTML">Restaurer</button>'
+    else:
+        btn = ""
+
+    return f"""<div class="screen-card" id="screen-{s.id}">
+    {img}
+    <div class="screen-info">
+      <div class="screen-name" title="{s.name}">{s.name}</div>
+      <div class="screen-meta">{s.width:.0f}x{s.height:.0f} {mapped}</div>
+      <div class="flex justify-between items-center mt-1">
+        <span class="badge badge-{s.status}">{s.status}</span>
+        {btn}
+      </div>
+    </div>
+  </div>"""
+
+
+@router.post("/discrepancies/{disc_id}/status/{new_status}", response_class=HTMLResponse)
+def update_discrepancy_status(
+    slug: str,
+    disc_id: int,
+    new_status: str,
+    project: Project = Depends(get_project),
+    session: Session = Depends(get_session),
+) -> str:
+    disc = session.get(Discrepancy, disc_id)
+    if not disc:
+        raise HTTPException(status_code=404)
+
+    valid = ("open", "ignored", "acknowledged", "fixed", "wontfix")
+    if new_status not in valid:
+        raise HTTPException(status_code=400)
+
+    disc.status = new_status
+    session.add(disc)
+    session.commit()
+    session.refresh(disc)
+    return _disc_card_html(disc, slug)
+
+
+@router.post("/screens/{screen_id}/status/{new_status}", response_class=HTMLResponse)
+def update_screen_status(
+    slug: str,
+    screen_id: int,
+    new_status: str,
+    project: Project = Depends(get_project),
+    session: Session = Depends(get_session),
+) -> str:
+    screen = session.exec(
+        select(Screen).where(Screen.id == screen_id, Screen.project_id == project.id)
+    ).first()
+    if not screen:
+        raise HTTPException(status_code=404)
+
+    if new_status not in ("current", "obsolete", "draft", "component"):
+        raise HTTPException(status_code=400)
+
+    screen.status = new_status
+    session.add(screen)
+    session.commit()
+    session.refresh(screen)
+    return _screen_card_html(screen, slug)

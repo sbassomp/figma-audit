@@ -11,7 +11,7 @@ from figma_audit.api import deps
 from fastapi import Request
 from fastapi.responses import FileResponse, Response
 
-from figma_audit.api.routes import discrepancies, projects, runs, screens, web
+from figma_audit.api.routes import discrepancies, htmx, projects, runs, screens, web
 from figma_audit.db.engine import init_db
 
 
@@ -31,6 +31,7 @@ def create_app(db_path: str = "figma-audit.db") -> FastAPI:
     app.include_router(runs.router)
     app.include_router(screens.router)
     app.include_router(discrepancies.router)
+    app.include_router(htmx.router)
 
     # Web UI routes (must be before static mount)
     app.include_router(web.router)

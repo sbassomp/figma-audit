@@ -40,6 +40,27 @@
   </div>
 </div>
 
+{% if pages_with_discs %}
+<div class="card mb-2">
+  <h3>Comparaisons par ecran</h3>
+  <table>
+    <thead>
+      <tr><th>Page</th><th>Ecarts</th><th>Fidelite</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for pid, info in pages_with_discs.items() %}
+      <tr>
+        <td class="mono">{{ pid }}</td>
+        <td>{{ info.count }}</td>
+        <td>{% if info.fidelity %}<span class="fidelity-badge fidelity-{{ info.fidelity }}">{{ info.fidelity }}</span>{% endif %}</td>
+        <td><a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ pid }}" class="btn btn-sm">Comparer</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 {% if discrepancies %}
 <div class="card">
   <div class="flex justify-between items-center mb-1">
@@ -69,27 +90,9 @@
     {% endif %}
     {% if d.status == 'open' %}
     <div class="discrepancy-actions">
-      <button class="btn btn-sm"
-              hx-patch="/api/projects/{{ project.slug }}/discrepancies/{{ d.id }}"
-              hx-vals='{"status": "ignored"}'
-              hx-target="#disc-{{ d.id }}"
-              hx-swap="outerHTML">
-        Ignorer
-      </button>
-      <button class="btn btn-sm"
-              hx-patch="/api/projects/{{ project.slug }}/discrepancies/{{ d.id }}"
-              hx-vals='{"status": "wontfix"}'
-              hx-target="#disc-{{ d.id }}"
-              hx-swap="outerHTML">
-        Won't fix
-      </button>
-      <button class="btn btn-sm"
-              hx-patch="/api/projects/{{ project.slug }}/discrepancies/{{ d.id }}"
-              hx-vals='{"status": "fixed"}'
-              hx-target="#disc-{{ d.id }}"
-              hx-swap="outerHTML">
-        Corrige
-      </button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/ignored" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Ignorer</button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/wontfix" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Won't fix</button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/fixed" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Corrige</button>
     </div>
     {% endif %}
   </div>
