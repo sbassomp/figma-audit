@@ -260,6 +260,31 @@ def import_screens(source: str, output: str | None, config_path: str | None) -> 
 
     console.print(f"[bold green]{matched}/{len(manifest['screens'])} screens with images[/bold green]")
 
+    # Sync image_path to DB if it exists
+    db_path = Path("figma-audit.db")
+    if db_path.exists():
+        try:
+            from figma_audit.db.engine import get_engine, init_db
+            from figma_audit.db.models import Screen as DBScreen
+            from sqlmodel import Session, select
+
+            init_db(str(db_path))
+            engine = get_engine(str(db_path))
+            manifest_images = {s["id"]: s["image_path"] for s in manifest["screens"] if s.get("image_path")}
+            updated = 0
+            with Session(engine) as session:
+                for sc in session.exec(select(DBScreen)).all():
+                    new_path = manifest_images.get(sc.figma_node_id)
+                    if new_path and sc.image_path != new_path:
+                        sc.image_path = new_path
+                        session.add(sc)
+                        updated += 1
+                session.commit()
+            if updated:
+                console.print(f"  DB synced: {updated} screen image paths updated")
+        except Exception:
+            pass
+
     if extract_dir:
         shutil.rmtree(extract_dir, ignore_errors=True)
 
