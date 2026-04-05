@@ -239,7 +239,16 @@ def run(config: Config) -> Path:
             seen.add(key)
             unique_pairs.append(p)
 
-    console.print(f"[bold]Comparing {len(unique_pairs)} Figma/App pairs[/bold]")
+    # Estimate cost (2 images ~1600 tokens each + ~500 text = ~3700 input, ~800 output per pair)
+    est_input = len(unique_pairs) * 3700
+    est_output = len(unique_pairs) * 800
+    from figma_audit.utils.claude_client import PRICING, DEFAULT_PRICING
+    pricing = PRICING.get(DEFAULT_MODEL, DEFAULT_PRICING)
+    est_cost = est_input * pricing["input"] / 1_000_000 + est_output * pricing["output"] / 1_000_000
+    console.print(
+        f"[bold]Comparing {len(unique_pairs)} Figma/App pairs[/bold] "
+        f"(estimation: ~{est_input + est_output:,} tokens, ~${est_cost:.2f})"
+    )
 
     client = ClaudeClient(api_key=config.anthropic_api_key)
     comparisons = []
@@ -274,6 +283,7 @@ def run(config: Config) -> Path:
                 user_prompt=user_prompt,
                 images=[figma_img_path, app_img_path],
                 max_tokens=4096,
+                phase="compare",
             )
 
             discrepancies = result.get("discrepancies", [])
@@ -313,6 +323,8 @@ def run(config: Config) -> Path:
                 "overall_fidelity": "error",
                 "summary": f"Erreur: {e}",
             })
+
+    client.print_usage()
 
     # Statistics
     by_severity = {"critical": 0, "important": 0, "minor": 0}

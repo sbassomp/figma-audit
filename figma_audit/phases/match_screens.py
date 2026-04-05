@@ -160,6 +160,7 @@ def run(config: Config) -> Path:
                 user_prompt=user_prompt,
                 images=image_paths,
                 max_tokens=8192,
+                phase="match",
             )
             all_mappings.extend(result.get("mappings", []))
 
@@ -182,8 +183,11 @@ def run(config: Config) -> Path:
             system_prompt=SYSTEM_PROMPT,
             user_prompt=user_prompt,
             max_tokens=8192,
+            phase="match",
         )
         all_mappings.extend(result.get("mappings", []))
+
+    client.print_usage()
 
     # ── Build YAML output ──────────────────────────────────────────
     mapping_data = {

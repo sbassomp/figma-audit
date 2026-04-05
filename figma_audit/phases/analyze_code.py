@@ -296,7 +296,9 @@ def run(config: Config) -> Path:
         system_prompt=SYSTEM_PROMPT,
         user_prompt=user_prompt,
         max_tokens=16384,
+        phase="analyze",
     )
+    client.print_usage()
 
     # ── Step 5: Save manifest ──────────────────────────────────────
     with open(manifest_path, "w") as f:
