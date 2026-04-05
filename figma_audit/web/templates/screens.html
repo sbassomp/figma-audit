@@ -44,8 +44,7 @@
         <button class="btn btn-sm"
                 hx-post="/htmx/projects/{{ project.slug }}/screens/{{ s.id }}/status/obsolete"
                 hx-target="#screen-{{ s.id }}"
-                hx-swap="outerHTML"
-                hx-confirm="Marquer cet ecran comme obsolete ?">
+                hx-swap="outerHTML">
           Obsolete
         </button>
         {% elif s.status == 'obsolete' %}
