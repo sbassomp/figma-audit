@@ -12,7 +12,7 @@ from figma_audit.db.models import Discrepancy, Project, Screen
 router = APIRouter(prefix="/htmx/projects/{slug}", tags=["htmx"])
 
 
-def _disc_card_html(d: Discrepancy, slug: str) -> str:
+def _disc_card_html(d: Discrepancy, slug: str, run_id: int | None = None) -> str:
     """Render a single discrepancy card as HTML fragment."""
     values_html = ""
     if d.figma_value or d.app_value:
@@ -33,7 +33,7 @@ def _disc_card_html(d: Discrepancy, slug: str) -> str:
 
     return f"""<div class="discrepancy {d.severity}" id="disc-{d.id}">
     <div class="discrepancy-header">
-      <span class="text-xs text-muted mono">{d.category} - {d.page_id} ({d.route})</span>
+      <a href="/projects/{slug}/runs/{run_id}/compare/{d.page_id}" class="text-xs mono" style="color: var(--text-muted); text-decoration: none;" title="Voir la comparaison">{d.category} - {d.page_id} ({d.route})</a>
       <div class="flex gap-1 items-center">
         <span class="badge badge-{d.status}">{d.status}</span>
         <span class="badge badge-{d.severity}">{d.severity}</span>
@@ -94,7 +94,7 @@ def update_discrepancy_status(
     session.add(disc)
     session.commit()
     session.refresh(disc)
-    return _disc_card_html(disc, slug)
+    return _disc_card_html(disc, slug, run_id=disc.run_id)
 
 
 @router.post("/screens/{screen_id}/status/{new_status}", response_class=HTMLResponse)

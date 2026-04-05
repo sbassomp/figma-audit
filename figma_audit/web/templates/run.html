@@ -75,7 +75,7 @@
   {% for d in discrepancies %}
   <div class="discrepancy {{ d.severity }}" id="disc-{{ d.id }}">
     <div class="discrepancy-header">
-      <span class="text-xs text-muted mono">{{ d.category }} - {{ d.page_id }} ({{ d.route }})</span>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ d.page_id }}" class="text-xs mono" style="color: var(--text-muted); text-decoration: none;" title="Voir la comparaison">{{ d.category }} - {{ d.page_id }} ({{ d.route }})</a>
       <div class="flex gap-1 items-center">
         <span class="badge badge-{{ d.status }}">{{ d.status }}</span>
         <span class="badge badge-{{ d.severity }}">{{ d.severity }}</span>

@@ -274,6 +274,7 @@ label {
 .discrepancy-values code {
   background: var(--surface2); padding: 0.1rem 0.3rem; border-radius: 3px;
 }
+.discrepancy-header a:hover { color: var(--accent) !important; }
 .discrepancy-actions {
   display: flex; gap: 0.4rem; margin-top: 0.5rem;
 }
