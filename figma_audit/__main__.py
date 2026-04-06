@@ -8,6 +8,7 @@ import click
 from rich.console import Console
 
 from figma_audit.config import Config
+from figma_audit.utils.checks import check_api_keys, check_playwright_browser, load_env_file
 
 console = Console()
 
@@ -72,6 +73,7 @@ def analyze(
     config_path: str | None,
 ) -> None:
     """Phase 1: Analyze project code -- detect framework, extract routes, produce manifest."""
+    load_env_file()
     cfg = Config.load(
         config_path=_find_config(config_path),
         project=project,
@@ -92,6 +94,7 @@ def match(
     config_path: str | None,
 ) -> None:
     """Phase 3: Match Figma screens to application routes using AI Vision."""
+    load_env_file()
     cfg = Config.load(
         config_path=_find_config(config_path),
         output=output,
@@ -113,6 +116,7 @@ def capture(
     config_path: str | None,
 ) -> None:
     """Phase 4: Capture app screenshots via Playwright."""
+    load_env_file()
     cfg = Config.load(
         config_path=_find_config(config_path),
         app_url=app_url,
@@ -133,6 +137,7 @@ def compare(
     config_path: str | None,
 ) -> None:
     """Phase 5: Compare Figma designs against app screenshots."""
+    load_env_file()
     cfg = Config.load(
         config_path=_find_config(config_path),
         output=output,
@@ -312,7 +317,14 @@ def run(
     offline: bool,
 ) -> None:
     """Run the full audit pipeline (all 6 phases)."""
+    import sys
+
     from figma_audit.utils.progress import RunProgress, set_progress
+
+    load_env_file()
+
+    if not check_api_keys():
+        sys.exit(1)
 
     cfg = Config.load(config_path=_find_config(config_path))
 
@@ -364,6 +376,8 @@ def run(
             )
 
         elif phase_name == "capture":
+            if not check_playwright_browser():
+                sys.exit(1)
             from figma_audit.phases.capture_app import run as run_capture
             run_capture(cfg)
             captures = _count_captures(cfg)
@@ -443,6 +457,8 @@ def _count_discrepancies(cfg: Config) -> int:
 @click.option("--db", "db_path", default="figma-audit.db", help="SQLite database path")
 def serve(host: str, port: int, db_path: str) -> None:
     """Start the figma-audit web server (API + dashboard)."""
+    load_env_file()
+
     import uvicorn
 
     from figma_audit.api.app import create_app
