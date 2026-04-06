@@ -1,0 +1,63 @@
+<div id="run-progress" {% if polling %}hx-get="/htmx/projects/{{ slug }}/runs/{{ run_id }}/progress" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+  <div class="card">
+    <h3>Progression</h3>
+    <div style="margin-top: 0.75rem;">
+      {% for phase in phases %}
+      <div class="flex items-center gap-2 mb-1">
+        <div style="width: 20px; text-align: center;">
+          {% if phase.status == 'completed' %}
+            <span style="color: var(--good);">&#10003;</span>
+          {% elif phase.status == 'running' %}
+            <span style="color: var(--accent);">&#9679;</span>
+          {% else %}
+            <span style="color: var(--text-muted);">&#9675;</span>
+          {% endif %}
+        </div>
+        <div style="width: 140px; font-size: 0.85rem; {% if phase.status == 'running' %}color: var(--accent); font-weight: 600;{% elif phase.status == 'pending' %}color: var(--text-muted);{% endif %}">
+          {{ phase.label }}
+        </div>
+        <div style="flex: 1;">
+          {% if phase.status == 'running' and current_total > 0 %}
+          <div style="background: var(--surface2); border-radius: 4px; height: 8px; overflow: hidden;">
+            <div style="background: var(--accent); height: 100%; width: {{ (current_progress / current_total * 100) | int }}%; transition: width 0.3s;"></div>
+          </div>
+          {% elif phase.status == 'running' %}
+          <div style="background: var(--surface2); border-radius: 4px; height: 8px; overflow: hidden;">
+            <div style="background: var(--accent); height: 100%; width: 100%; opacity: 0.3; animation: pulse 1.5s infinite;"></div>
+          </div>
+          {% endif %}
+        </div>
+        <div class="text-xs text-muted" style="width: 80px; text-align: right;">
+          {% if phase.duration %}{{ "%.1f" | format(phase.duration) }}s{% endif %}
+        </div>
+        <div class="text-xs text-muted" style="width: 100px;">
+          {{ phase.detail or '' }}
+        </div>
+        <div class="text-xs text-muted" style="width: 60px; text-align: right;">
+          {% if phase.cost %}~${{ "%.3f" | format(phase.cost) }}{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if current_step %}
+    <div class="text-xs text-muted mt-1" style="padding-left: 28px;">
+      {{ current_step }}
+      {% if current_total > 0 %}({{ current_progress }}/{{ current_total }}){% endif %}
+    </div>
+    {% endif %}
+
+    {% if elapsed %}
+    <div class="text-xs text-muted mt-2" style="padding-left: 28px;">
+      Temps ecoule: {{ "%.0f" | format(elapsed) }}s
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+</style>

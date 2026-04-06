@@ -312,33 +312,42 @@ def run(
     offline: bool,
 ) -> None:
     """Run the full audit pipeline (all 6 phases)."""
+    from figma_audit.utils.progress import RunProgress, set_progress
+
     cfg = Config.load(config_path=_find_config(config_path))
 
-    phases = PHASE_ORDER
+    phases = list(PHASE_ORDER)
     if from_phase:
         idx = phases.index(from_phase)
         phases = phases[idx:]
-        console.print(f"[bold]Resuming from {PHASE_NAMES[from_phase]}[/bold]\n")
-    else:
-        console.print("[bold]Running full audit pipeline[/bold]\n")
+
+    progress = RunProgress(phases=phases)
+    set_progress(progress)
+
+    console.print(f"[bold]Running audit pipeline ({len(phases)} phases)[/bold]")
 
     for phase_name in phases:
-        console.print(f"\n{'='*60}")
-        console.print(f"[bold]{PHASE_NAMES[phase_name]}[/bold]")
-        console.print(f"{'='*60}\n")
+        progress.start_phase(phase_name)
 
         if phase_name == "analyze":
             from figma_audit.phases.analyze_code import run as run_analyze
             run_analyze(cfg)
+            client = _get_last_client("analyze_code")
+            progress.finish_phase(
+                detail=f"{_count_pages(cfg)} pages",
+                cost=client.usage.cost(client.model) if client else 0,
+                tokens=client.usage.total_tokens if client else 0,
+            )
 
         elif phase_name == "figma":
             from figma_audit.phases.export_figma import run as run_figma
             run_figma(cfg, offline=offline, target_page=target_page)
+            screens = _count_screens(cfg)
+            progress.finish_phase(detail=f"{screens} ecrans")
 
         elif phase_name == "match":
             from figma_audit.phases.match_screens import run as run_match
             mapping_path = run_match(cfg)
-            # Auto-verify for pipeline mode
             import yaml
             with open(mapping_path) as f:
                 data = yaml.safe_load(f)
@@ -346,20 +355,86 @@ def run(
                 data["verified"] = True
                 with open(mapping_path, "w") as f:
                     yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-                console.print("[yellow]Auto-verified mapping for pipeline mode[/yellow]")
+            matched = sum(1 for m in data.get("mappings", []) if m.get("route"))
+            client = _get_last_client("match_screens")
+            progress.finish_phase(
+                detail=f"{matched} matches",
+                cost=client.usage.cost(client.model) if client else 0,
+                tokens=client.usage.total_tokens if client else 0,
+            )
 
         elif phase_name == "capture":
             from figma_audit.phases.capture_app import run as run_capture
             run_capture(cfg)
+            captures = _count_captures(cfg)
+            progress.finish_phase(detail=f"{captures} pages")
 
         elif phase_name == "compare":
             from figma_audit.phases.compare import run as run_compare
             run_compare(cfg)
+            client = _get_last_client("compare")
+            discs = _count_discrepancies(cfg)
+            progress.finish_phase(
+                detail=f"{discs} ecarts",
+                cost=client.usage.cost(client.model) if client else 0,
+                tokens=client.usage.total_tokens if client else 0,
+            )
 
         elif phase_name == "report":
             from figma_audit.phases.report import run as run_report
             report_path = run_report(cfg)
-            console.print(f"\n[bold green]Pipeline complete! Report: {report_path}[/bold green]")
+            size_mb = report_path.stat().st_size / 1024 / 1024
+            progress.finish_phase(detail=f"{size_mb:.1f} MB")
+
+    progress.print_summary()
+    set_progress(None)
+
+
+def _get_last_client(module_hint: str):
+    """Try to retrieve the ClaudeClient from a recently-run phase module."""
+    # Phases create their client locally; we inspect the module globals
+    # This is a best-effort approach
+    import sys
+    for mod_name, mod in sys.modules.items():
+        if module_hint in mod_name and hasattr(mod, "client"):
+            return mod.client
+    return None
+
+
+def _count_pages(cfg: Config) -> int:
+    import json
+    path = cfg.output_dir / "pages_manifest.json"
+    if path.exists():
+        with open(path) as f:
+            return len(json.load(f).get("pages", []))
+    return 0
+
+
+def _count_screens(cfg: Config) -> int:
+    import json
+    path = cfg.output_dir / "figma_manifest.json"
+    if path.exists():
+        with open(path) as f:
+            return len(json.load(f).get("screens", []))
+    return 0
+
+
+def _count_captures(cfg: Config) -> int:
+    import json
+    path = cfg.output_dir / "app_captures.json"
+    if path.exists():
+        with open(path) as f:
+            return len(json.load(f))
+    return 0
+
+
+def _count_discrepancies(cfg: Config) -> int:
+    import json
+    path = cfg.output_dir / "discrepancies.json"
+    if path.exists():
+        with open(path) as f:
+            return json.load(f).get("statistics", {}).get("total_discrepancies", 0)
+    return 0
 
 
 @cli.command()

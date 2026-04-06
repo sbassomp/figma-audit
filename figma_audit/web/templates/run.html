@@ -40,6 +40,12 @@
   </div>
 </div>
 
+{% if run.status == 'running' %}
+<div hx-get="/htmx/projects/{{ project.slug }}/runs/{{ run.id }}/progress" hx-trigger="load, every 3s" hx-swap="innerHTML">
+  <div class="card"><p class="text-muted">Chargement de la progression...</p></div>
+</div>
+{% endif %}
+
 {% if pages_with_discs %}
 <div class="card mb-2">
   <h3>Comparaisons par ecran</h3>

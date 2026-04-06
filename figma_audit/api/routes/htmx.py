@@ -74,6 +74,77 @@ def _screen_card_html(s: Screen, slug: str) -> str:
   </div>"""
 
 
+@router.get("/runs/{run_id}/progress", response_class=HTMLResponse)
+def run_progress(
+    slug: str,
+    run_id: int,
+    project: Project = Depends(get_project),
+    session: Session = Depends(get_session),
+) -> str:
+    """Return progress HTML fragment, polled by htmx every 3s."""
+    from pathlib import Path
+
+    from figma_audit.db.models import Run
+    from figma_audit.utils.progress import PHASE_LABELS, get_progress
+
+    run = session.exec(
+        select(Run).where(Run.id == run_id, Run.project_id == project.id)
+    ).first()
+    if not run:
+        return "<div>Run not found</div>"
+
+    # Try to get live progress from the running pipeline
+    live = get_progress()
+    if live and run.status == "running":
+        data = live.to_dict()
+        from jinja2 import Environment, FileSystemLoader
+
+        tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
+        env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
+        tmpl = env.get_template("run_progress.html")
+        return tmpl.render(
+            slug=slug,
+            run_id=run_id,
+            phases=data["phases"],
+            current_step=data["current_step"],
+            current_progress=data["current_progress"],
+            current_total=data["current_total"],
+            elapsed=data["elapsed"],
+            polling=True,
+        )
+
+    # Run is not active -- show final state without polling
+    phases = []
+    import json
+
+    stats = json.loads(run.stats_json) if run.stats_json else {}
+    for name in ["analyze", "figma", "match", "capture", "compare", "report"]:
+        phases.append({
+            "name": name,
+            "label": PHASE_LABELS.get(name, name),
+            "status": "completed" if run.status == "completed" else "pending",
+            "duration": None,
+            "detail": None,
+            "cost": None,
+        })
+
+    from jinja2 import Environment, FileSystemLoader
+
+    tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
+    env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
+    tmpl = env.get_template("run_progress.html")
+    return tmpl.render(
+        slug=slug,
+        run_id=run_id,
+        phases=phases,
+        current_step="",
+        current_progress=0,
+        current_total=0,
+        elapsed=None,
+        polling=False,
+    )
+
+
 @router.post("/discrepancies/{disc_id}/status/{new_status}", response_class=HTMLResponse)
 def update_discrepancy_status(
     slug: str,
