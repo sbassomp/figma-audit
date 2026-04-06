@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, func, select
@@ -111,6 +111,122 @@ def create_project_form(
     session.add(project)
     session.commit()
     return RedirectResponse(f"/projects/{slug}", status_code=303)
+
+
+@router.post("/projects/{slug}/start-run")
+def start_run(
+    slug: str,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+):
+    project = session.exec(select(Project).where(Project.slug == slug)).first()
+    if not project:
+        return RedirectResponse("/", status_code=303)
+
+    run = Run(project_id=project.id, status="running")
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+
+    background_tasks.add_task(_run_pipeline_bg, project.id, run.id)
+    return RedirectResponse(f"/projects/{slug}/runs/{run.id}", status_code=303)
+
+
+def _run_pipeline_bg(project_id: int, run_id: int) -> None:
+    """Execute the full pipeline in background with proper config."""
+    import json
+    import os
+    from datetime import datetime, timezone
+
+    from figma_audit.db.engine import get_engine
+    from figma_audit.utils.progress import RunProgress, set_progress
+
+    engine = get_engine()
+    with Session(engine) as session:
+        run = session.get(Run, run_id)
+        project = session.get(Project, project_id)
+        if not run or not project:
+            return
+
+        run.started_at = datetime.now(timezone.utc)
+        session.add(run)
+        session.commit()
+
+        progress = RunProgress()
+        set_progress(progress)
+
+        try:
+            from figma_audit.config import Config
+
+            cfg = Config(
+                project=project.project_path,
+                figma_url=project.figma_url,
+                app_url=project.app_url,
+                output=project.output_dir,
+                figma_token=os.environ.get("FIGMA_TOKEN"),
+                anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY"),
+            )
+
+            phases = ["analyze", "figma", "match", "capture", "compare", "report"]
+
+            for phase_name in phases:
+                run.current_phase = phase_name
+                session.add(run)
+                session.commit()
+                progress.start_phase(phase_name)
+
+                if phase_name == "analyze":
+                    from figma_audit.phases.analyze_code import run as run_analyze
+                    run_analyze(cfg)
+                    progress.finish_phase()
+
+                elif phase_name == "figma":
+                    from figma_audit.phases.export_figma import run as run_figma
+                    run_figma(cfg, offline=True)
+                    progress.finish_phase()
+
+                elif phase_name == "match":
+                    from figma_audit.phases.match_screens import run as run_match
+                    import yaml
+                    mapping_path = run_match(cfg)
+                    with open(mapping_path) as f:
+                        data = yaml.safe_load(f)
+                    if not data.get("verified"):
+                        data["verified"] = True
+                        with open(mapping_path, "w") as f:
+                            yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                    progress.finish_phase()
+
+                elif phase_name == "capture":
+                    from figma_audit.phases.capture_app import run as run_capture
+                    run_capture(cfg)
+                    progress.finish_phase()
+
+                elif phase_name == "compare":
+                    from figma_audit.phases.compare import run as run_compare
+                    run_compare(cfg)
+                    progress.finish_phase()
+
+                elif phase_name == "report":
+                    from figma_audit.phases.report import run as run_report
+                    run_report(cfg)
+                    progress.finish_phase()
+
+            # Import results into DB
+            from figma_audit.api.routes.runs import _import_results
+            _import_results(session, project, run)
+
+            run.status = "completed"
+            run.finished_at = datetime.now(timezone.utc)
+
+        except Exception as e:
+            run.status = "failed"
+            run.error = str(e)[:1000]
+            run.finished_at = datetime.now(timezone.utc)
+
+        session.add(run)
+        session.commit()
+        set_progress(None)
 
 
 @router.get("/projects/{slug}", response_class=HTMLResponse)

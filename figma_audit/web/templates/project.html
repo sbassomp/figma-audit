@@ -9,8 +9,7 @@
   </div>
   <div class="flex gap-1">
     <a href="/projects/{{ project.slug }}/screens" class="btn">Ecrans Figma</a>
-    <form hx-post="/api/projects/{{ project.slug }}/runs" hx-target="body" hx-swap="none"
-          hx-on::after-request="if(event.detail.successful) window.location.reload()">
+    <form method="POST" action="/projects/{{ project.slug }}/start-run">
       <button type="submit" class="btn btn-primary">Lancer un run</button>
     </form>
   </div>
