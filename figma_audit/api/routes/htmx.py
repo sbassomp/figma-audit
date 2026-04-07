@@ -18,22 +18,33 @@ def _disc_card_html(d: Discrepancy, slug: str, run_id: int | None = None) -> str
     if d.figma_value or d.app_value:
         parts = []
         if d.figma_value:
-            parts.append(f'<span>Figma: <code>{d.figma_value}</code></span>')
+            parts.append(f"<span>Figma: <code>{d.figma_value}</code></span>")
         if d.app_value:
-            parts.append(f'<span>App: <code>{d.app_value}</code></span>')
+            parts.append(f"<span>App: <code>{d.app_value}</code></span>")
         values_html = f'<div class="discrepancy-values">{"".join(parts)}</div>'
 
     actions_html = ""
     if d.status == "open":
-        actions_html = f"""<div class="discrepancy-actions">
-      <button class="btn btn-sm" hx-post="/htmx/projects/{slug}/discrepancies/{d.id}/status/ignored" hx-target="#disc-{d.id}" hx-swap="outerHTML">Ignorer</button>
-      <button class="btn btn-sm" hx-post="/htmx/projects/{slug}/discrepancies/{d.id}/status/wontfix" hx-target="#disc-{d.id}" hx-swap="outerHTML">Won't fix</button>
-      <button class="btn btn-sm" hx-post="/htmx/projects/{slug}/discrepancies/{d.id}/status/fixed" hx-target="#disc-{d.id}" hx-swap="outerHTML">Corrige</button>
-    </div>"""
+        base_url = f"/htmx/projects/{slug}/discrepancies/{d.id}/status"
+        hx_tgt = f'hx-target="#disc-{d.id}" hx-swap="outerHTML"'
+        actions_html = (
+            f'<div class="discrepancy-actions">'
+            f'<button class="btn btn-sm" '
+            f'hx-post="{base_url}/ignored" {hx_tgt}>Ignorer</button>'
+            f'<button class="btn btn-sm" '
+            f'hx-post="{base_url}/wontfix" {hx_tgt}>Won\'t fix</button>'
+            f'<button class="btn btn-sm" '
+            f'hx-post="{base_url}/fixed" {hx_tgt}>Corrige</button>'
+            f"</div>"
+        )
 
+    compare_url = f"/projects/{slug}/runs/{run_id}/compare/{d.page_id}"
+    link_style = "color: var(--text-muted); text-decoration: none;"
+    link_text = f"{d.category} - {d.page_id} ({d.route})"
     return f"""<div class="discrepancy {d.severity}" id="disc-{d.id}">
     <div class="discrepancy-header">
-      <a href="/projects/{slug}/runs/{run_id}/compare/{d.page_id}" class="text-xs mono" style="color: var(--text-muted); text-decoration: none;" title="Voir la comparaison">{d.category} - {d.page_id} ({d.route})</a>
+      <a href="{compare_url}" class="text-xs mono" style="{link_style}"
+         title="Voir la comparaison">{link_text}</a>
       <div class="flex gap-1 items-center">
         <span class="badge badge-{d.status}">{d.status}</span>
         <span class="badge badge-{d.severity}">{d.severity}</span>
@@ -50,14 +61,29 @@ def _screen_card_html(s: Screen, slug: str) -> str:
     if s.image_path:
         img = f'<img src="/files/{slug}/{s.image_path}" alt="{s.name}" loading="lazy">'
     else:
-        img = '<div style="height:220px;background:var(--surface2);display:flex;align-items:center;justify-content:center;"><span class="text-muted text-sm">Pas d\'image</span></div>'
+        img = (
+            '<div style="height:220px;background:var(--surface2);'
+            "display:flex;align-items:center;"
+            'justify-content:center;">'
+            '<span class="text-muted text-sm">'
+            "Pas d'image</span></div>"
+        )
 
     mapped = f'<span class="mono">{s.mapped_route}</span>' if s.mapped_route else ""
 
+    scr_base = f"/htmx/projects/{slug}/screens/{s.id}/status"
+    scr_tgt = f'hx-target="#screen-{s.id}" hx-swap="outerHTML"'
     if s.status == "current":
-        btn = f'<button class="btn btn-sm" hx-post="/htmx/projects/{slug}/screens/{s.id}/status/obsolete" hx-target="#screen-{s.id}" hx-swap="outerHTML" hx-confirm="Marquer cet ecran comme obsolete ?">Obsolete</button>'
+        btn = (
+            f'<button class="btn btn-sm" '
+            f'hx-post="{scr_base}/obsolete" {scr_tgt} '
+            f'hx-confirm="Marquer cet ecran comme obsolete ?">'
+            f"Obsolete</button>"
+        )
     elif s.status == "obsolete":
-        btn = f'<button class="btn btn-sm" hx-post="/htmx/projects/{slug}/screens/{s.id}/status/current" hx-target="#screen-{s.id}" hx-swap="outerHTML">Restaurer</button>'
+        btn = (
+            f'<button class="btn btn-sm" hx-post="{scr_base}/current" {scr_tgt}>Restaurer</button>'
+        )
     else:
         btn = ""
 
@@ -88,14 +114,13 @@ def run_progress(
     from figma_audit.db.models import Run
     from figma_audit.utils.progress import PHASE_LABELS
 
-    run = session.exec(
-        select(Run).where(Run.id == run_id, Run.project_id == project.id)
-    ).first()
+    run = session.exec(select(Run).where(Run.id == run_id, Run.project_id == project.id)).first()
     if not run:
         return "<div>Run not found</div>"
 
     tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
     from jinja2 import Environment, FileSystemLoader
+
     env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
     tmpl = env.get_template("run_progress.html")
 

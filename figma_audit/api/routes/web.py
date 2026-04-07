@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, func, select
 
+from figma_audit import get_build_info
 from figma_audit.api.deps import get_session
 from figma_audit.db.models import Discrepancy, Project, Run, Screen
 
@@ -19,7 +20,6 @@ _templates_dir = Path(__file__).parent.parent.parent / "web" / "templates"
 templates = Jinja2Templates(directory=str(_templates_dir))
 
 # Inject build version into all templates
-from figma_audit import get_build_info
 templates.env.globals["build_version"] = get_build_info()
 
 
@@ -43,7 +43,9 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
         ).first()
 
         critical_count = session.exec(
-            select(func.count(Discrepancy.id)).join(Run).where(
+            select(func.count(Discrepancy.id))
+            .join(Run)
+            .where(
                 Run.project_id == p.id,
                 Discrepancy.severity == "critical",
                 Discrepancy.status == "open",
@@ -51,44 +53,56 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
         ).one()
 
         fixed_count = session.exec(
-            select(func.count(Discrepancy.id)).join(Run).where(
+            select(func.count(Discrepancy.id))
+            .join(Run)
+            .where(
                 Run.project_id == p.id,
                 Discrepancy.status == "fixed",
             )
         ).one()
 
-        run_count = session.exec(
-            select(func.count(Run.id)).where(Run.project_id == p.id)
-        ).one()
+        run_count = session.exec(select(func.count(Run.id)).where(Run.project_id == p.id)).one()
 
         total_runs += run_count
         total_critical += critical_count
         total_fixed += fixed_count
 
-        project_list.append({
-            "name": p.name,
-            "slug": p.slug,
-            "app_url": p.app_url,
-            "last_run_date": last_run.created_at.strftime("%Y-%m-%d %H:%M") if last_run else None,
-            "last_run_status": last_run.status if last_run else None,
-        })
+        project_list.append(
+            {
+                "name": p.name,
+                "slug": p.slug,
+                "app_url": p.app_url,
+                "last_run_date": last_run.created_at.strftime("%Y-%m-%d %H:%M")
+                if last_run
+                else None,
+                "last_run_status": last_run.status if last_run else None,
+            }
+        )
 
-    return templates.TemplateResponse(request, "dashboard.html", context={
-        "active_nav": "dashboard",
-        "nav_projects": _nav_projects(session),
-        "projects": project_list,
-        "total_runs": total_runs,
-        "total_critical": total_critical,
-        "total_fixed": total_fixed,
-    })
+    return templates.TemplateResponse(
+        request,
+        "dashboard.html",
+        context={
+            "active_nav": "dashboard",
+            "nav_projects": _nav_projects(session),
+            "projects": project_list,
+            "total_runs": total_runs,
+            "total_critical": total_critical,
+            "total_fixed": total_fixed,
+        },
+    )
 
 
 @router.get("/projects/new", response_class=HTMLResponse)
 def new_project_form(request: Request, session: Session = Depends(get_session)):
-    return templates.TemplateResponse(request, "new_project.html", context={
-        "active_nav": "new_project",
-        "nav_projects": _nav_projects(session),
-    })
+    return templates.TemplateResponse(
+        request,
+        "new_project.html",
+        context={
+            "active_nav": "new_project",
+            "nav_projects": _nav_projects(session),
+        },
+    )
 
 
 @router.post("/projects/new")
@@ -101,6 +115,7 @@ def create_project_form(
     session: Session = Depends(get_session),
 ):
     import re
+
     slug = re.sub(r"[^\w\s-]", "", name.lower().strip())
     slug = re.sub(r"[\s_]+", "-", slug).strip("-")
 
@@ -166,8 +181,18 @@ def upload_screens(
                 continue
             try:
                 subprocess.run(
-                    ["pdftoppm", "-png", "-r", "150", "-singlefile", str(pdf), str(dest.with_suffix(""))],
-                    capture_output=True, timeout=10, check=True,
+                    [
+                        "pdftoppm",
+                        "-png",
+                        "-r",
+                        "150",
+                        "-singlefile",
+                        str(pdf),
+                        str(dest.with_suffix("")),
+                    ],
+                    capture_output=True,
+                    timeout=10,
+                    check=True,
                 )
                 converted += 1
             except Exception:
@@ -204,8 +229,11 @@ def upload_screens(
         if manifest_path.exists():
             with open(manifest_path) as f:
                 manifest = json.load(f)
-            manifest_images = {s["id"]: s["image_path"] for s in manifest["screens"] if s.get("image_path")}
+            manifest_images = {
+                s["id"]: s["image_path"] for s in manifest["screens"] if s.get("image_path")
+            }
             from figma_audit.db.models import Screen as DBScreen
+
             for sc in session.exec(select(DBScreen).where(DBScreen.project_id == project.id)).all():
                 new_path = manifest_images.get(sc.figma_node_id)
                 if new_path and sc.image_path != new_path:
@@ -288,33 +316,46 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
 
                 if phase_name == "analyze":
                     from figma_audit.phases.analyze_code import run as run_analyze
+
                     run_analyze(cfg)
 
                 elif phase_name == "figma":
                     from figma_audit.phases.export_figma import run as run_figma
+
                     run_figma(cfg, offline=True)
 
                 elif phase_name == "match":
-                    from figma_audit.phases.match_screens import run as run_match
                     import yaml
+
+                    from figma_audit.phases.match_screens import run as run_match
+
                     mapping_path = run_match(cfg)
                     with open(mapping_path) as f:
                         data = yaml.safe_load(f)
                     if not data.get("verified"):
                         data["verified"] = True
                         with open(mapping_path, "w") as f:
-                            yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                            yaml.dump(
+                                data,
+                                f,
+                                default_flow_style=False,
+                                allow_unicode=True,
+                                sort_keys=False,
+                            )
 
                 elif phase_name == "capture":
                     from figma_audit.phases.capture_app import run as run_capture
+
                     run_capture(cfg)
 
                 elif phase_name == "compare":
                     from figma_audit.phases.compare import run as run_compare
+
                     run_compare(cfg)
 
                 elif phase_name == "report":
                     from figma_audit.phases.report import run as run_report
+
                     run_report(cfg)
 
                 progress.finish_phase()
@@ -322,6 +363,7 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
 
             # Import results into DB
             from figma_audit.api.routes.runs import _import_results
+
             _import_results(session, project, run)
 
             run.status = "completed"
@@ -360,28 +402,37 @@ def project_detail(request: Request, slug: str, session: Session = Depends(get_s
     run_list = []
     for r in runs:
         stats = json.loads(r.stats_json) if r.stats_json else None
-        run_list.append({
-            "id": r.id,
-            "status": r.status,
-            "current_phase": r.current_phase,
-            "created_at": r.created_at.isoformat(),
-            "error": r.error,
-            "stats": stats,
-        })
+        run_list.append(
+            {
+                "id": r.id,
+                "status": r.status,
+                "current_phase": r.current_phase,
+                "created_at": r.created_at.isoformat(),
+                "error": r.error,
+                "stats": stats,
+            }
+        )
 
-    return templates.TemplateResponse(request, "project.html", context={
-        "active_project": slug,
-        "nav_projects": _nav_projects(session),
-        "project": project,
-        "runs": run_list,
-        "screens_count": screens_count,
-        "last_stats": last_stats,
-    })
+    return templates.TemplateResponse(
+        request,
+        "project.html",
+        context={
+            "active_project": slug,
+            "nav_projects": _nav_projects(session),
+            "project": project,
+            "runs": run_list,
+            "screens_count": screens_count,
+            "last_stats": last_stats,
+        },
+    )
 
 
 @router.get("/projects/{slug}/screens", response_class=HTMLResponse)
 def screens_gallery(
-    request: Request, slug: str, status: str | None = None, session: Session = Depends(get_session)
+    request: Request,
+    slug: str,
+    status: str | None = None,
+    session: Session = Depends(get_session),
 ):
     project = session.exec(select(Project).where(Project.slug == slug)).first()
     if not project:
@@ -393,18 +444,24 @@ def screens_gallery(
     query = query.order_by(Screen.name)
     screens = session.exec(query).all()
 
-    return templates.TemplateResponse(request, "screens.html", context={
-        "active_project": slug,
-        "nav_projects": _nav_projects(session),
-        "project": project,
-        "screens": screens,
-        "filter_status": status,
-    })
+    return templates.TemplateResponse(
+        request,
+        "screens.html",
+        context={
+            "active_project": slug,
+            "nav_projects": _nav_projects(session),
+            "project": project,
+            "screens": screens,
+            "filter_status": status,
+        },
+    )
 
 
 @router.get("/projects/{slug}/runs/{run_id}", response_class=HTMLResponse)
 def run_detail(
-    request: Request, slug: str, run_id: int,
+    request: Request,
+    slug: str,
+    run_id: int,
     severity: str | None = None,
     status: str | None = None,
     session: Session = Depends(get_session),
@@ -413,9 +470,7 @@ def run_detail(
     if not project:
         return RedirectResponse("/")
 
-    run = session.exec(
-        select(Run).where(Run.id == run_id, Run.project_id == project.id)
-    ).first()
+    run = session.exec(select(Run).where(Run.id == run_id, Run.project_id == project.id)).first()
     if not run:
         return RedirectResponse(f"/projects/{slug}")
 
@@ -428,6 +483,7 @@ def run_detail(
     discrepancies = session.exec(query).all()
 
     from figma_audit.db.models import Capture
+
     captures = session.exec(select(Capture).where(Capture.run_id == run_id)).all()
 
     by_severity = {"critical": 0, "important": 0, "minor": 0}
@@ -441,54 +497,65 @@ def run_detail(
     pages_with_discs = {}
     for d in all_discs:
         if d.page_id not in pages_with_discs:
-            pages_with_discs[d.page_id] = {"count": 0, "screen_id": d.screen_id, "fidelity": d.overall_fidelity}
+            pages_with_discs[d.page_id] = {
+                "count": 0,
+                "screen_id": d.screen_id,
+                "fidelity": d.overall_fidelity,
+            }
         pages_with_discs[d.page_id]["count"] += 1
 
-    return templates.TemplateResponse(request, "run.html", context={
-        "active_project": slug,
-        "nav_projects": _nav_projects(session),
-        "project": project,
-        "run": {
-            "id": run.id,
-            "status": run.status,
-            "current_phase": run.current_phase,
-            "created_at": run.created_at.isoformat(),
-            "error": run.error,
+    return templates.TemplateResponse(
+        request,
+        "run.html",
+        context={
+            "active_project": slug,
+            "nav_projects": _nav_projects(session),
+            "project": project,
+            "run": {
+                "id": run.id,
+                "status": run.status,
+                "current_phase": run.current_phase,
+                "created_at": run.created_at.isoformat(),
+                "error": run.error,
+            },
+            "discrepancies": discrepancies,
+            "filter_severity": severity,
+            "filter_status": status,
+            "pages_with_discs": pages_with_discs,
+            "stats": {
+                "total_discrepancies": len(all_discs),
+                "total_captures": len(captures),
+                "by_severity": by_severity,
+                "by_category": by_category,
+            },
         },
-        "discrepancies": discrepancies,
-        "filter_severity": severity,
-        "filter_status": status,
-        "pages_with_discs": pages_with_discs,
-        "stats": {
-            "total_discrepancies": len(all_discs),
-            "total_captures": len(captures),
-            "by_severity": by_severity,
-            "by_category": by_category,
-        },
-    })
+    )
 
 
 @router.get("/projects/{slug}/runs/{run_id}/compare/{page_id}", response_class=HTMLResponse)
 def comparison_view(
-    request: Request, slug: str, run_id: int, page_id: str,
+    request: Request,
+    slug: str,
+    run_id: int,
+    page_id: str,
     session: Session = Depends(get_session),
 ):
     project = session.exec(select(Project).where(Project.slug == slug)).first()
     if not project:
         return RedirectResponse("/")
 
-    run = session.exec(
-        select(Run).where(Run.id == run_id, Run.project_id == project.id)
-    ).first()
+    run = session.exec(select(Run).where(Run.id == run_id, Run.project_id == project.id)).first()
     if not run:
         return RedirectResponse(f"/projects/{slug}")
 
     # Get discrepancies for this page
     discs = session.exec(
-        select(Discrepancy).where(
+        select(Discrepancy)
+        .where(
             Discrepancy.run_id == run_id,
             Discrepancy.page_id == page_id,
-        ).order_by(Discrepancy.severity)
+        )
+        .order_by(Discrepancy.severity)
     ).all()
 
     fidelity = discs[0].overall_fidelity if discs else "unknown"
@@ -499,6 +566,7 @@ def comparison_view(
 
     # Get the capture
     from figma_audit.db.models import Capture
+
     capture = session.exec(
         select(Capture).where(Capture.run_id == run_id, Capture.page_id == page_id)
     ).first()
@@ -506,15 +574,23 @@ def comparison_view(
     if not screen:
         screen = type("FakeScreen", (), {"name": page_id, "image_path": None})()
     if not capture:
-        capture = type("FakeCapture", (), {"page_id": page_id, "route": "", "screenshot_path": None})()
+        capture = type(
+            "FakeCapture",
+            (),
+            {"page_id": page_id, "route": "", "screenshot_path": None},
+        )()
 
-    return templates.TemplateResponse(request, "comparison.html", context={
-        "active_project": slug,
-        "nav_projects": _nav_projects(session),
-        "project": project,
-        "run_id": run_id,
-        "screen": screen,
-        "capture": capture,
-        "discrepancies": discs,
-        "fidelity": fidelity,
-    })
+    return templates.TemplateResponse(
+        request,
+        "comparison.html",
+        context={
+            "active_project": slug,
+            "nav_projects": _nav_projects(session),
+            "project": project,
+            "run_id": run_id,
+            "screen": screen,
+            "capture": capture,
+            "discrepancies": discs,
+            "fidelity": fidelity,
+        },
+    )

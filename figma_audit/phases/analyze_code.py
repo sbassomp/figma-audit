@@ -152,9 +152,10 @@ def _build_prompt(
     for rel_path, content in page_files.items():
         entry = f"### {rel_path}\n```dart\n{content}\n```\n"
         if total_size + len(entry) > MAX_TOTAL_PROMPT_SIZE:
+            included = len([s for s in sections if s.startswith("### ")])
+            remaining = len(page_files) - included
             sections.append(
-                f"\n[Remaining {len(page_files) - len([s for s in sections if s.startswith('### ')])} "
-                f"page files omitted for size. Listed paths only:]\n"
+                f"\n[Remaining {remaining} page files omitted for size. Listed paths only:]\n"
             )
             for rp in page_files:
                 sections.append(f"- {rp}\n")
@@ -175,11 +176,14 @@ JSON manifest describing every navigable page in the application.
 Rules:
 - Output ONLY valid JSON, no markdown, no commentary.
 - Temperature 0: be precise and factual, only include what the code explicitly shows.
-- For navigation_steps: describe the Playwright actions needed to reach each page from the app root.
+- For navigation_steps: describe the Playwright actions needed to reach \
+each page from the app root.
 - For form_fields: list all user-input fields visible on the page.
-- For interactive_states: list distinct visual states (loading, empty, populated, error, wizard steps).
+- For interactive_states: list distinct visual states \
+(loading, empty, populated, error, wizard steps).
 - For auth_required: check if the route is behind an auth guard/redirect.
-- For test_data: suggest realistic test values for forms (French context: phone +33..., French addresses).
+- For test_data: suggest realistic test values for forms \
+(French context: phone +33..., French addresses).
 - Extract design tokens from the theme/token files into a structured format.
 
 JSON Schema to follow:
@@ -281,10 +285,12 @@ def run(config: Config) -> Path:
     page_files = _read_files(page_paths)
     token_files = _read_files(token_paths)
 
-    console.print(
-        f"  Total source: "
-        f"{sum(len(v) for v in router_files.values()) + sum(len(v) for v in page_files.values()) + sum(len(v) for v in token_files.values()):,} chars"
+    total_chars = (
+        sum(len(v) for v in router_files.values())
+        + sum(len(v) for v in page_files.values())
+        + sum(len(v) for v in token_files.values())
     )
+    console.print(f"  Total source: {total_chars:,} chars")
 
     # ── Step 4: Build prompt and call Claude ───────────────────────
     user_prompt = _build_prompt(framework, router_files, page_files, token_files, project_dir)

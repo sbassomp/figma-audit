@@ -5,18 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from figma_audit.api import deps
-from fastapi import Request
-from fastapi.responses import FileResponse, Response
-
 from figma_audit.api.routes import discrepancies, htmx, projects, runs, screens, web
 from figma_audit.db.engine import init_db
 
 
 def _get_version() -> str:
     from figma_audit import get_build_info
+
     return get_build_info()
 
 
@@ -45,6 +44,7 @@ def create_app(db_path: str = "figma-audit.db") -> FastAPI:
     @app.get("/files/{slug}/{path:path}")
     def serve_project_file(slug: str, path: str) -> Response:
         from sqlmodel import Session, select
+
         from figma_audit.db.engine import get_engine
         from figma_audit.db.models import Project
 

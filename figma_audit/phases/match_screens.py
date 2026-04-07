@@ -107,7 +107,9 @@ def run(config: Config) -> Path:
     routes_text = _build_routes_description(pages_manifest)
     screens = figma_manifest.get("screens", [])
 
-    console.print(f"[bold]Matching {len(screens)} Figma screens to {len(pages_manifest.get('pages', []))} routes[/bold]")
+    n_screens = len(screens)
+    n_routes = len(pages_manifest.get("pages", []))
+    console.print(f"[bold]Matching {n_screens} Figma screens to {n_routes} routes[/bold]")
 
     # Split screens into those with images and those without
     screens_with_images = []
@@ -166,9 +168,7 @@ def run(config: Config) -> Path:
 
     # ── Batch 2: Screens without images (text-only) ───────────────
     if screens_without_images:
-        console.print(
-            f"[bold]Text-only matching ({len(screens_without_images)} screens)...[/bold]"
-        )
+        console.print(f"[bold]Text-only matching ({len(screens_without_images)} screens)...[/bold]")
 
         screens_text = _build_screens_text(screens_without_images)
         user_prompt = (

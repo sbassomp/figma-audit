@@ -70,8 +70,9 @@ def _setup_test_data(app_url: str, test_data: dict, seed_account: dict | None = 
     Uses seed_account (a different user) so courses appear in "available" for the main user.
     Falls back to main test_data credentials if no seed_account.
     """
-    import requests
     from datetime import datetime, timedelta, timezone
+
+    import requests
 
     base = app_url.rstrip("/") + "/api"
     email = (seed_account or {}).get("email") or test_data.get("email")
@@ -81,14 +82,20 @@ def _setup_test_data(app_url: str, test_data: dict, seed_account: dict | None = 
 
     # Step 1: Get auth token
     try:
-        requests.post(f"{base}/public/auth/login/request-otp-email", json={"email": email}, timeout=10)
+        requests.post(
+            f"{base}/public/auth/login/request-otp-email",
+            json={"email": email},
+            timeout=10,
+        )
         resp = requests.post(
             f"{base}/public/auth/login/verify-otp-email",
             json={"email": email, "code": otp},
             timeout=10,
         )
         if resp.status_code != 200:
-            console.print(f"    [yellow]API login failed ({resp.status_code}): {resp.text[:100]}[/yellow]")
+            console.print(
+                f"    [yellow]API login failed ({resp.status_code}): {resp.text[:100]}[/yellow]"
+            )
             return []
         body = resp.json()
         token = body.get("accessToken") or body.get("access_token")
@@ -143,16 +150,25 @@ def _setup_test_data(app_url: str, test_data: dict, seed_account: dict | None = 
     created_ids = []
     for i, course_data in enumerate(courses):
         try:
-            resp = requests.post(f"{base}/exchange/courses", json=course_data, headers=headers, timeout=10)
+            resp = requests.post(
+                f"{base}/exchange/courses",
+                json=course_data,
+                headers=headers,
+                timeout=10,
+            )
             if resp.status_code in (200, 201):
                 course_id = resp.json().get("id")
                 if course_id:
                     created_ids.append(str(course_id))
-                console.print(f"    Course {i+1} created")
+                console.print(f"    Course {i + 1} created")
             else:
-                console.print(f"    [yellow]Course {i+1} failed ({resp.status_code}): {resp.text[:100]}[/yellow]")
+                console.print(
+                    f"    [yellow]Course {i + 1} failed "
+                    f"({resp.status_code}): "
+                    f"{resp.text[:100]}[/yellow]"
+                )
         except Exception as e:
-            console.print(f"    [yellow]Course {i+1} error: {e}[/yellow]")
+            console.print(f"    [yellow]Course {i + 1} error: {e}[/yellow]")
 
     console.print(f"  [green]{len(created_ids)} test course(s) created[/green]")
     return created_ids
@@ -170,7 +186,11 @@ def _cleanup_test_data(app_url: str, test_data: dict, course_ids: list[str]) -> 
     otp = test_data.get("otp", "1234")
 
     try:
-        requests.post(f"{base}/public/auth/login/request-otp-email", json={"email": email}, timeout=10)
+        requests.post(
+            f"{base}/public/auth/login/request-otp-email",
+            json={"email": email},
+            timeout=10,
+        )
         resp = requests.post(
             f"{base}/public/auth/login/verify-otp-email",
             json={"email": email, "code": otp},
@@ -191,9 +211,7 @@ def _cleanup_test_data(app_url: str, test_data: dict, course_ids: list[str]) -> 
         pass
 
 
-async def _flutter_login(
-    page: Page, app_url: str, email: str, otp: str = "1234"
-) -> bool:
+async def _flutter_login(page: Page, app_url: str, email: str, otp: str = "1234") -> bool:
     """Authenticate on a Flutter CanvasKit app via coordinate-based interaction.
 
     Flow: /signin -> fill email -> click Connexion -> /login/otp -> fill OTP -> logged in.
@@ -382,8 +400,6 @@ async def _capture_route(
     interactive_states = page_info.get("interactive_states", [])
     state_screenshots = []
     for state in interactive_states[1:]:  # Skip first state (already captured)
-        state_slug = f"{slug}--{_slugify(state)}"
-        state_path = screenshots_dir / f"{state_slug}.png"
         # We can only capture additional states if we have navigation steps for them
         # For now, just note them
         state_screenshots.append({"state": state, "screenshot": None})
@@ -403,9 +419,9 @@ async def _run_async(config: Config) -> Path:
     styles_path = output_dir / "app_styles.json"
 
     if not mapping_path.exists():
-        raise FileNotFoundError(f"screen_mapping.yaml not found. Run Phase 3 first.")
+        raise FileNotFoundError("screen_mapping.yaml not found. Run Phase 3 first.")
     if not pages_manifest_path.exists():
-        raise FileNotFoundError(f"pages_manifest.json not found. Run Phase 1 first.")
+        raise FileNotFoundError("pages_manifest.json not found. Run Phase 1 first.")
 
     with open(mapping_path) as f:
         mapping_data = yaml.safe_load(f)
@@ -478,7 +494,9 @@ async def _run_async(config: Config) -> Path:
             if logged_in:
                 console.print("  [green]Authentication successful[/green]")
             else:
-                console.print("  [yellow]Authentication failed -- continuing without login[/yellow]")
+                console.print(
+                    "  [yellow]Authentication failed -- continuing without login[/yellow]"
+                )
 
         # Capture each page
         all_results = []
@@ -494,12 +512,14 @@ async def _run_async(config: Config) -> Path:
                     all_styles[page_info["id"]] = styles
             except Exception as e:
                 console.print(f"  [red]Error capturing {page_info['id']}: {e}[/red]")
-                all_results.append({
-                    "page_id": page_info["id"],
-                    "route": page_info["route"],
-                    "screenshot": None,
-                    "error": str(e),
-                })
+                all_results.append(
+                    {
+                        "page_id": page_info["id"],
+                        "route": page_info["route"],
+                        "screenshot": None,
+                        "error": str(e),
+                    }
+                )
 
         await browser.close()
 
@@ -520,7 +540,7 @@ async def _run_async(config: Config) -> Path:
     captured = sum(1 for r in all_results if r.get("screenshot"))
     errors = sum(1 for r in all_results if r.get("error"))
 
-    console.print(f"\n[bold green]Capture done.[/bold green]")
+    console.print("\n[bold green]Capture done.[/bold green]")
     console.print(f"  {captured} screenshots saved to {screenshots_dir}")
     if all_styles:
         console.print(f"  {len(all_styles)} pages with DOM styles extracted")

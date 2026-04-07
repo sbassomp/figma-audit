@@ -46,20 +46,24 @@ def list_projects(session: Session = Depends(get_session)) -> list[dict]:
         last_run = session.exec(
             select(Run).where(Run.project_id == p.id).order_by(Run.created_at.desc())
         ).first()
-        result.append({
-            "id": p.id,
-            "name": p.name,
-            "slug": p.slug,
-            "figma_url": p.figma_url,
-            "app_url": p.app_url,
-            "output_dir": p.output_dir,
-            "created_at": p.created_at.isoformat(),
-            "last_run": {
-                "id": last_run.id,
-                "status": last_run.status,
-                "created_at": last_run.created_at.isoformat(),
-            } if last_run else None,
-        })
+        result.append(
+            {
+                "id": p.id,
+                "name": p.name,
+                "slug": p.slug,
+                "figma_url": p.figma_url,
+                "app_url": p.app_url,
+                "output_dir": p.output_dir,
+                "created_at": p.created_at.isoformat(),
+                "last_run": {
+                    "id": last_run.id,
+                    "status": last_run.status,
+                    "created_at": last_run.created_at.isoformat(),
+                }
+                if last_run
+                else None,
+            }
+        )
     return result
 
 
@@ -121,9 +125,7 @@ def get_project(slug: str, session: Session = Depends(get_session)) -> dict:
 
 
 @router.put("/{slug}")
-def update_project(
-    slug: str, data: ProjectUpdate, session: Session = Depends(get_session)
-) -> dict:
+def update_project(slug: str, data: ProjectUpdate, session: Session = Depends(get_session)) -> dict:
     project = session.exec(select(Project).where(Project.slug == slug)).first()
     if not project:
         raise HTTPException(status_code=404, detail=f"Project '{slug}' not found")

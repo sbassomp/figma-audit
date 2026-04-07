@@ -73,19 +73,13 @@ def get_run(
     project: Project = Depends(get_project),
     session: Session = Depends(get_session),
 ) -> dict:
-    run = session.exec(
-        select(Run).where(Run.id == run_id, Run.project_id == project.id)
-    ).first()
+    run = session.exec(select(Run).where(Run.id == run_id, Run.project_id == project.id)).first()
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    discrepancies = session.exec(
-        select(Discrepancy).where(Discrepancy.run_id == run.id)
-    ).all()
+    discrepancies = session.exec(select(Discrepancy).where(Discrepancy.run_id == run.id)).all()
 
-    captures = session.exec(
-        select(Capture).where(Capture.run_id == run.id)
-    ).all()
+    captures = session.exec(select(Capture).where(Capture.run_id == run.id)).all()
 
     by_severity = {"critical": 0, "important": 0, "minor": 0}
     by_category: dict[str, int] = {}
@@ -139,7 +133,7 @@ def _execute_run(project_id: int, run_id: int, from_phase: str | None) -> None:
 
             phases = ["analyze", "figma", "match", "capture", "compare", "report"]
             if from_phase and from_phase in phases:
-                phases = phases[phases.index(from_phase):]
+                phases = phases[phases.index(from_phase) :]
 
             for phase_name in phases:
                 run.current_phase = phase_name
@@ -148,33 +142,46 @@ def _execute_run(project_id: int, run_id: int, from_phase: str | None) -> None:
 
                 if phase_name == "analyze":
                     from figma_audit.phases.analyze_code import run as run_analyze
+
                     run_analyze(cfg)
 
                 elif phase_name == "figma":
                     from figma_audit.phases.export_figma import run as run_figma
+
                     run_figma(cfg, offline=True)
 
                 elif phase_name == "match":
-                    from figma_audit.phases.match_screens import run as run_match
                     import yaml
+
+                    from figma_audit.phases.match_screens import run as run_match
+
                     mapping_path = run_match(cfg)
                     with open(mapping_path) as f:
                         data = yaml.safe_load(f)
                     if not data.get("verified"):
                         data["verified"] = True
                         with open(mapping_path, "w") as f:
-                            yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                            yaml.dump(
+                                data,
+                                f,
+                                default_flow_style=False,
+                                allow_unicode=True,
+                                sort_keys=False,
+                            )
 
                 elif phase_name == "capture":
                     from figma_audit.phases.capture_app import run as run_capture
+
                     run_capture(cfg)
 
                 elif phase_name == "compare":
                     from figma_audit.phases.compare import run as run_compare
+
                     run_compare(cfg)
 
                 elif phase_name == "report":
                     from figma_audit.phases.report import run as run_report
+
                     run_report(cfg)
 
             # Import results into DB
@@ -219,15 +226,18 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
                     width=s.get("width", 0),
                     height=s.get("height", 0),
                     image_path=s.get("image_path"),
-                    metadata_json=json.dumps({
-                        "background_color": s.get("background_color"),
-                        "element_count": len(s.get("elements", [])),
-                    }),
+                    metadata_json=json.dumps(
+                        {
+                            "background_color": s.get("background_color"),
+                            "element_count": len(s.get("elements", [])),
+                        }
+                    ),
                 )
                 session.add(screen)
 
     # Import mapping from screen_mapping.yaml
     import yaml
+
     mapping_path = output_dir / "screen_mapping.yaml"
     if mapping_path.exists():
         with open(mapping_path) as f:
@@ -268,9 +278,7 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
             disc_data = json.load(f)
 
         # Build screen lookup
-        screens = session.exec(
-            select(Screen).where(Screen.project_id == project.id)
-        ).all()
+        screens = session.exec(select(Screen).where(Screen.project_id == project.id)).all()
         screen_by_page_id: dict[str, Screen] = {}
         for s in screens:
             if s.mapped_page_id:

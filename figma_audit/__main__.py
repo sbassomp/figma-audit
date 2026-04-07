@@ -27,7 +27,11 @@ def _find_config(config_path: str | None) -> Path | None:
 
 
 @click.group()
-@click.version_option(version=None, package_name="figma-audit", message="%(prog)s " + __import__("figma_audit").get_build_info())
+@click.version_option(
+    version=None,
+    package_name="figma-audit",
+    message="%(prog)s " + __import__("figma_audit").get_build_info(),
+)
 def cli() -> None:
     """figma-audit: Semantic comparison between Figma designs and deployed web apps."""
 
@@ -222,8 +226,18 @@ def import_screens(source: str, output: str | None, config_path: str | None) -> 
             continue
         try:
             subprocess.run(
-                ["pdftoppm", "-png", "-r", "150", "-singlefile", str(pdf), str(dest.with_suffix(""))],
-                capture_output=True, timeout=10, check=True,
+                [
+                    "pdftoppm",
+                    "-png",
+                    "-r",
+                    "150",
+                    "-singlefile",
+                    str(pdf),
+                    str(dest.with_suffix("")),
+                ],
+                capture_output=True,
+                timeout=10,
+                check=True,
             )
             converted += 1
         except Exception:
@@ -263,19 +277,23 @@ def import_screens(source: str, output: str | None, config_path: str | None) -> 
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-    console.print(f"[bold green]{matched}/{len(manifest['screens'])} screens with images[/bold green]")
+    total_screens = len(manifest["screens"])
+    console.print(f"[bold green]{matched}/{total_screens} screens with images[/bold green]")
 
     # Sync image_path to DB if it exists
     db_path = Path("figma-audit.db")
     if db_path.exists():
         try:
+            from sqlmodel import Session, select
+
             from figma_audit.db.engine import get_engine, init_db
             from figma_audit.db.models import Screen as DBScreen
-            from sqlmodel import Session, select
 
             init_db(str(db_path))
             engine = get_engine(str(db_path))
-            manifest_images = {s["id"]: s["image_path"] for s in manifest["screens"] if s.get("image_path")}
+            manifest_images = {
+                s["id"]: s["image_path"] for s in manifest["screens"] if s.get("image_path")
+            }
             updated = 0
             with Session(engine) as session:
                 for sc in session.exec(select(DBScreen)).all():
@@ -343,6 +361,7 @@ def run(
 
         if phase_name == "analyze":
             from figma_audit.phases.analyze_code import run as run_analyze
+
             run_analyze(cfg)
             client = _get_last_client("analyze_code")
             progress.finish_phase(
@@ -353,20 +372,29 @@ def run(
 
         elif phase_name == "figma":
             from figma_audit.phases.export_figma import run as run_figma
+
             run_figma(cfg, offline=offline, target_page=target_page)
             screens = _count_screens(cfg)
             progress.finish_phase(detail=f"{screens} ecrans")
 
         elif phase_name == "match":
             from figma_audit.phases.match_screens import run as run_match
+
             mapping_path = run_match(cfg)
             import yaml
+
             with open(mapping_path) as f:
                 data = yaml.safe_load(f)
             if not data.get("verified"):
                 data["verified"] = True
                 with open(mapping_path, "w") as f:
-                    yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+                    yaml.dump(
+                        data,
+                        f,
+                        default_flow_style=False,
+                        allow_unicode=True,
+                        sort_keys=False,
+                    )
             matched = sum(1 for m in data.get("mappings", []) if m.get("route"))
             client = _get_last_client("match_screens")
             progress.finish_phase(
@@ -379,12 +407,14 @@ def run(
             if not check_playwright_browser():
                 sys.exit(1)
             from figma_audit.phases.capture_app import run as run_capture
+
             run_capture(cfg)
             captures = _count_captures(cfg)
             progress.finish_phase(detail=f"{captures} pages")
 
         elif phase_name == "compare":
             from figma_audit.phases.compare import run as run_compare
+
             run_compare(cfg)
             client = _get_last_client("compare")
             discs = _count_discrepancies(cfg)
@@ -396,6 +426,7 @@ def run(
 
         elif phase_name == "report":
             from figma_audit.phases.report import run as run_report
+
             report_path = run_report(cfg)
             size_mb = report_path.stat().st_size / 1024 / 1024
             progress.finish_phase(detail=f"{size_mb:.1f} MB")
@@ -409,6 +440,7 @@ def _get_last_client(module_hint: str):
     # Phases create their client locally; we inspect the module globals
     # This is a best-effort approach
     import sys
+
     for mod_name, mod in sys.modules.items():
         if module_hint in mod_name and hasattr(mod, "client"):
             return mod.client
@@ -417,6 +449,7 @@ def _get_last_client(module_hint: str):
 
 def _count_pages(cfg: Config) -> int:
     import json
+
     path = cfg.output_dir / "pages_manifest.json"
     if path.exists():
         with open(path) as f:
@@ -426,6 +459,7 @@ def _count_pages(cfg: Config) -> int:
 
 def _count_screens(cfg: Config) -> int:
     import json
+
     path = cfg.output_dir / "figma_manifest.json"
     if path.exists():
         with open(path) as f:
@@ -435,6 +469,7 @@ def _count_screens(cfg: Config) -> int:
 
 def _count_captures(cfg: Config) -> int:
     import json
+
     path = cfg.output_dir / "app_captures.json"
     if path.exists():
         with open(path) as f:
@@ -444,6 +479,7 @@ def _count_captures(cfg: Config) -> int:
 
 def _count_discrepancies(cfg: Config) -> int:
     import json
+
     path = cfg.output_dir / "discrepancies.json"
     if path.exists():
         with open(path) as f:
@@ -497,10 +533,14 @@ def setup() -> None:
     anthropic_key = existing_env.get("ANTHROPIC_API_KEY", os.environ.get("ANTHROPIC_API_KEY", ""))
     figma_token = existing_env.get("FIGMA_TOKEN", os.environ.get("FIGMA_TOKEN", ""))
 
-    console.print(f"  ANTHROPIC_API_KEY: {'[green]configure[/green]' if anthropic_key else '[red]manquante[/red]'}")
-    console.print(f"  FIGMA_TOKEN:       {'[green]configure[/green]' if figma_token else '[red]manquante[/red]'}")
+    api_status = "[green]configure[/green]" if anthropic_key else "[red]manquante[/red]"
+    figma_status = "[green]configure[/green]" if figma_token else "[red]manquante[/red]"
+    console.print(f"  ANTHROPIC_API_KEY: {api_status}")
+    console.print(f"  FIGMA_TOKEN:       {figma_status}")
 
-    if not anthropic_key or click.confirm("  Modifier ANTHROPIC_API_KEY ?", default=not anthropic_key):
+    if not anthropic_key or click.confirm(
+        "  Modifier ANTHROPIC_API_KEY ?", default=not anthropic_key
+    ):
         anthropic_key = click.prompt("  ANTHROPIC_API_KEY", default=anthropic_key)
 
     if not figma_token or click.confirm("  Modifier FIGMA_TOKEN ?", default=not figma_token):
@@ -544,13 +584,15 @@ def setup() -> None:
         if click.confirm("  Installer figma-audit comme service launchd ?", default=True):
             _install_launchd_service(env_file, db_path)
     else:
-        console.print("  [dim]Pas de gestionnaire de service detecte. Utilisez 'figma-audit serve'.[/dim]")
+        console.print(
+            "  [dim]Pas de gestionnaire de service detecte. Utilisez 'figma-audit serve'.[/dim]"
+        )
 
     # ── Done ──────────────────────────────────────────────────────
-    console.print(f"\n[bold green]Setup termine ![/bold green]")
+    console.print("\n[bold green]Setup termine ![/bold green]")
     console.print(f"  Config:    {config_dir}")
     console.print(f"  Database:  {db_path}")
-    console.print(f"  Dashboard: http://127.0.0.1:8321")
+    console.print("  Dashboard: http://127.0.0.1:8321")
     console.print(f"\n  Pour lancer manuellement: figma-audit serve --db {db_path}")
 
 
@@ -590,15 +632,24 @@ WantedBy=default.target
 
     try:
         subprocess.run(["systemctl", "--user", "daemon-reload"], check=True, capture_output=True)
-        subprocess.run(["systemctl", "--user", "enable", "figma-audit"], check=True, capture_output=True)
-        subprocess.run(["systemctl", "--user", "start", "figma-audit"], check=True, capture_output=True)
+        subprocess.run(
+            ["systemctl", "--user", "enable", "figma-audit"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["systemctl", "--user", "start", "figma-audit"],
+            check=True,
+            capture_output=True,
+        )
         # Enable lingering so the service runs without active login session
         import getpass
+
         subprocess.run(["loginctl", "enable-linger", getpass.getuser()], capture_output=True)
-        console.print(f"  [green]Service installe et demarre[/green]")
-        console.print(f"  [dim]  systemctl --user status figma-audit[/dim]")
-        console.print(f"  [dim]  systemctl --user stop figma-audit[/dim]")
-        console.print(f"  [dim]  journalctl --user -u figma-audit -f[/dim]")
+        console.print("  [green]Service installe et demarre[/green]")
+        console.print("  [dim]  systemctl --user status figma-audit[/dim]")
+        console.print("  [dim]  systemctl --user stop figma-audit[/dim]")
+        console.print("  [dim]  journalctl --user -u figma-audit -f[/dim]")
     except subprocess.CalledProcessError as e:
         console.print(f"  [red]Erreur systemd: {e}[/red]")
         console.print(f"  [dim]Service ecrit dans {service_path}[/dim]")
@@ -665,8 +716,8 @@ def _install_launchd_service(env_file: Path, db_path: Path) -> None:
     try:
         subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
         subprocess.run(["launchctl", "load", str(plist_path)], check=True, capture_output=True)
-        console.print(f"  [green]Service installe et demarre[/green]")
-        console.print(f"  [dim]  launchctl list | grep figma-audit[/dim]")
+        console.print("  [green]Service installe et demarre[/green]")
+        console.print("  [dim]  launchctl list | grep figma-audit[/dim]")
         console.print(f"  [dim]  launchctl unload {plist_path}[/dim]")
     except subprocess.CalledProcessError as e:
         console.print(f"  [red]Erreur launchd: {e}[/red]")

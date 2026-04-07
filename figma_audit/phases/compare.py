@@ -35,8 +35,9 @@ Compare element by element on these criteria:
 while the Figma shows a populated state with data. This is NOT a design gap but a content gap.
 
 IMPORTANT - Distinguish design gaps from data gaps:
-- If the app displays an empty state (empty list, placeholder like "aucun element", "aucune course") \
-while the Figma shows populated data: classify as DONNEES_ABSENTES with severity "minor".
+- If the app displays an empty state (empty list, placeholder like \
+"aucun element", "aucune course") while the Figma shows populated data: \
+classify as DONNEES_ABSENTES with severity "minor".
   Still compare the structure, colors and layout of the empty state itself.
 - NEVER mark as "critical" an element that is missing only because there is no data \
 (course cards, activity lines, transaction rows, etc.)
@@ -103,9 +104,13 @@ def _build_comparison_context(
             parts.append("\n### Textes Figma:")
             for t in texts[:20]:
                 content = (t.get("content") or "")[:60]
-                font = f"{t.get('font_family', '?')} {t.get('font_size', '?')}px w{t.get('font_weight', '?')}"
+                font = (
+                    f"{t.get('font_family', '?')} "
+                    f"{t.get('font_size', '?')}px "
+                    f"w{t.get('font_weight', '?')}"
+                )
                 color = t.get("color", "?")
-                parts.append(f"  - \"{content}\" -- {font} -- {color}")
+                parts.append(f'  - "{content}" -- {font} -- {color}')
 
         colors_used = set()
         for e in elements:
@@ -123,9 +128,12 @@ def _build_comparison_context(
             parts.append(f"\n### Etats interactifs possibles: {', '.join(states)}")
             if "empty" in states and "populated" in states:
                 parts.append(
-                    "ATTENTION: cette page a un etat 'empty' et un etat 'populated'. "
-                    "Si l'app affiche un etat vide, comparer la structure/layout de l'etat vide, "
-                    "pas le contenu dynamique manquant (categorie DONNEES_ABSENTES, severity minor)."
+                    "ATTENTION: cette page a un etat 'empty' "
+                    "et un etat 'populated'. "
+                    "Si l'app affiche un etat vide, comparer "
+                    "la structure/layout de l'etat vide, "
+                    "pas le contenu dynamique manquant "
+                    "(categorie DONNEES_ABSENTES, severity minor)."
                 )
 
     # App computed styles (if available)
@@ -136,7 +144,7 @@ def _build_comparison_context(
             text = (s.get("text") or "")[:40]
             if text:
                 parts.append(
-                    f"  - \"{text}\" -- {s.get('fontFamily', '?')} "
+                    f'  - "{text}" -- {s.get("fontFamily", "?")} '
                     f"{s.get('fontSize', '?')} w{s.get('fontWeight', '?')} "
                     f"color={s.get('color', '?')} bg={s.get('backgroundColor', '?')}"
                 )
@@ -196,19 +204,19 @@ def run(config: Config) -> Path:
         db_path = Path.home() / ".config" / "figma-audit" / "figma-audit.db"
     if db_path.exists():
         try:
+            from sqlmodel import Session, select
+
             from figma_audit.db.engine import get_engine, init_db
             from figma_audit.db.models import Screen
-            from sqlmodel import Session, select
 
             init_db(str(db_path))
             engine = get_engine(str(db_path))
             with Session(engine) as session:
-                screens = session.exec(
-                    select(Screen).where(Screen.status == "obsolete")
-                ).all()
+                screens = session.exec(select(Screen).where(Screen.status == "obsolete")).all()
                 obsolete_screen_ids = {s.figma_node_id for s in screens}
             if obsolete_screen_ids:
-                console.print(f"  [dim]{len(obsolete_screen_ids)} ecran(s) obsolete(s) exclus[/dim]")
+                n_obs = len(obsolete_screen_ids)
+                console.print(f"  [dim]{n_obs} ecran(s) obsolete(s) exclus[/dim]")
         except Exception:
             pass
 
@@ -245,15 +253,17 @@ def run(config: Config) -> Path:
         if not figma_img_full.exists() or not app_img_full.exists():
             continue
 
-        pairs.append({
-            "figma_screen_id": figma_id,
-            "figma_screen_name": figma_screen.get("name", ""),
-            "page_id": page_id,
-            "route": route,
-            "figma_image": figma_img,
-            "app_image": app_img,
-            "figma_screen": figma_screen,
-        })
+        pairs.append(
+            {
+                "figma_screen_id": figma_id,
+                "figma_screen_name": figma_screen.get("name", ""),
+                "page_id": page_id,
+                "route": route,
+                "figma_image": figma_img,
+                "app_image": app_img,
+                "figma_screen": figma_screen,
+            }
+        )
 
     # Deduplicate: keep only the highest-confidence mapping per (figma_screen, page_id)
     seen = set()
@@ -267,7 +277,8 @@ def run(config: Config) -> Path:
     # Estimate cost (2 images ~1600 tokens each + ~500 text = ~3700 input, ~800 output per pair)
     est_input = len(unique_pairs) * 3700
     est_output = len(unique_pairs) * 800
-    from figma_audit.utils.claude_client import PRICING, DEFAULT_PRICING
+    from figma_audit.utils.claude_client import DEFAULT_MODEL, DEFAULT_PRICING, PRICING
+
     pricing = PRICING.get(DEFAULT_MODEL, DEFAULT_PRICING)
     est_cost = est_input * pricing["input"] / 1_000_000 + est_output * pricing["output"] / 1_000_000
     console.print(
@@ -281,7 +292,7 @@ def run(config: Config) -> Path:
 
     for i, pair in enumerate(unique_pairs):
         console.print(
-            f"  [{i+1}/{len(unique_pairs)}] {pair['figma_screen_name']} "
+            f"  [{i + 1}/{len(unique_pairs)}] {pair['figma_screen_name']} "
             f"vs {pair['page_id']} ({pair['route']})"
         )
 
@@ -338,16 +349,18 @@ def run(config: Config) -> Path:
 
         except Exception as e:
             console.print(f"    [red]Error: {e}[/red]")
-            comparisons.append({
-                "page_id": pair["page_id"],
-                "route": pair["route"],
-                "figma_screen": pair["figma_screen_name"],
-                "figma_image": pair["figma_image"],
-                "app_image": pair["app_image"],
-                "discrepancies": [],
-                "overall_fidelity": "error",
-                "summary": f"Erreur: {e}",
-            })
+            comparisons.append(
+                {
+                    "page_id": pair["page_id"],
+                    "route": pair["route"],
+                    "figma_screen": pair["figma_screen_name"],
+                    "figma_image": pair["figma_image"],
+                    "app_image": pair["app_image"],
+                    "discrepancies": [],
+                    "overall_fidelity": "error",
+                    "summary": f"Erreur: {e}",
+                }
+            )
 
     client.print_usage()
 
@@ -377,6 +390,10 @@ def run(config: Config) -> Path:
     console.print(f"\n[bold green]Comparisons saved to {discrepancies_path}[/bold green]")
     console.print(f"  {len(comparisons)} screens compared")
     console.print(f"  {total_discrepancies} ecarts total")
-    console.print(f"  Critical: {by_severity['critical']}, Important: {by_severity['important']}, Minor: {by_severity['minor']}")
+    console.print(
+        f"  Critical: {by_severity['critical']}, "
+        f"Important: {by_severity['important']}, "
+        f"Minor: {by_severity['minor']}"
+    )
 
     return discrepancies_path

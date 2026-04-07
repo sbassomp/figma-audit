@@ -44,10 +44,10 @@ def _xyz_to_lab(x: float, y: float, z: float) -> tuple[float, float, float]:
     def f(t: float) -> float:
         return t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
 
-    l = 116 * f(y) - 16
+    lab_l = 116 * f(y) - 16
     a = 500 * (f(x) - f(y))
     b = 200 * (f(y) - f(z))
-    return l, a, b
+    return lab_l, a, b
 
 
 def rgb_to_lab(r: int, g: int, b: int) -> tuple[float, float, float]:
@@ -64,7 +64,6 @@ def delta_e_2000(lab1: tuple[float, float, float], lab2: tuple[float, float, flo
     l1, a1, b1 = lab1
     l2, a2, b2 = lab2
 
-    avg_l = (l1 + l2) / 2
     c1 = math.sqrt(a1**2 + b1**2)
     c2 = math.sqrt(a2**2 + b2**2)
     avg_c = (c1 + c2) / 2

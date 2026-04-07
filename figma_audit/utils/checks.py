@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 from pathlib import Path
 
 from rich.console import Console
@@ -22,7 +21,9 @@ def check_playwright_browser() -> bool:
             return True
 
     console.print("[red]Chromium n'est pas installe pour Playwright.[/red]")
-    console.print("Lancez: [bold]figma-audit setup[/bold] ou [bold]playwright install chromium[/bold]")
+    console.print(
+        "Lancez: [bold]figma-audit setup[/bold] ou [bold]playwright install chromium[/bold]"
+    )
     return False
 
 

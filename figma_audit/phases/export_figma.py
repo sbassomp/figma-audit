@@ -103,9 +103,7 @@ def _extract_elements(node: dict, depth: int = 0, max_depth: int = 5) -> list[Fi
             for f in fills:
                 if f.get("type") == "SOLID" and f.get("visible", True):
                     c = f.get("color", {})
-                    color = rgba_to_hex(
-                        c.get("r", 0), c.get("g", 0), c.get("b", 0), c.get("a", 1)
-                    )
+                    color = rgba_to_hex(c.get("r", 0), c.get("g", 0), c.get("b", 0), c.get("a", 1))
                     break
 
             elements.append(
@@ -268,9 +266,7 @@ def run(
             file_data = json.load(f)
     else:
         if not config.figma_token:
-            raise ValueError(
-                "No Figma token. Set FIGMA_TOKEN env var or provide --figma-token."
-            )
+            raise ValueError("No Figma token. Set FIGMA_TOKEN env var or provide --figma-token.")
 
         client = FigmaClient(config.figma_token, config.figma)
 

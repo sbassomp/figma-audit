@@ -69,9 +69,7 @@ class FigmaClient:
                 f"Figma API error {resp.status_code} on {endpoint}: {resp.text[:200]}"
             )
 
-        raise FigmaClientError(
-            f"Max retries ({self.config.max_retries}) exceeded for {endpoint}"
-        )
+        raise FigmaClientError(f"Max retries ({self.config.max_retries}) exceeded for {endpoint}")
 
     def get_file(self, file_key: str) -> dict:
         """Fetch the full file tree."""

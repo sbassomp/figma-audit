@@ -43,10 +43,7 @@ def _generate_executive_summary(
     for comp in comparisons:
         fidelity = comp.get("overall_fidelity", "?")
         n_disc = len(comp.get("discrepancies", []))
-        findings.append(
-            f"- {comp['figma_screen']} ({comp['route']}): "
-            f"{fidelity}, {n_disc} ecarts"
-        )
+        findings.append(f"- {comp['figma_screen']} ({comp['route']}): {fidelity}, {n_disc} ecarts")
 
     stats = statistics
     prompt = (
@@ -57,10 +54,19 @@ def _generate_executive_summary(
         f"Important: {stats.get('by_severity', {}).get('important', 0)}, "
         f"Minor: {stats.get('by_severity', {}).get('minor', 0)}\n\n"
         f"Detail par ecran:\n" + "\n".join(findings) + "\n\n"
-        f"Categories les plus touchees: "
-        f"{', '.join(f'{k} ({v})' for k, v in sorted(stats.get('by_category', {}).items(), key=lambda x: -x[1])[:5])}\n\n"
-        f"Note: plusieurs ecrans protegees par authentification n'ont pas pu etre captures "
-        f"(redirect vers welcome). Seuls les ecrans publics ont ete compares reellement."
+        "Categories les plus touchees: "
+        + ", ".join(
+            f"{k} ({v})"
+            for k, v in sorted(
+                stats.get("by_category", {}).items(),
+                key=lambda x: -x[1],
+            )[:5]
+        )
+        + "\n\n"
+        "Note: plusieurs ecrans protegees par authentification "
+        "n'ont pas pu etre captures "
+        "(redirect vers welcome). Seuls les ecrans publics "
+        "ont ete compares reellement."
     )
 
     if api_key:

@@ -24,6 +24,7 @@ def get_build_info() -> str:
     if token_file.exists():
         try:
             import requests
+
             token = token_file.read_text().strip()
             resp = requests.get(
                 "https://git.gardendwarf.org/api/v4/projects/49/pipelines?per_page=1",

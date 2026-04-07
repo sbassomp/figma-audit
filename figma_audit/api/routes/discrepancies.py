@@ -31,9 +31,7 @@ def list_discrepancies(
     project: Project = Depends(get_project),
     session: Session = Depends(get_session),
 ) -> list[dict]:
-    run = session.exec(
-        select(Run).where(Run.id == run_id, Run.project_id == project.id)
-    ).first()
+    run = session.exec(select(Run).where(Run.id == run_id, Run.project_id == project.id)).first()
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
 
@@ -79,7 +77,10 @@ def update_discrepancy(
 
     valid_statuses = ("open", "ignored", "acknowledged", "fixed", "wontfix")
     if data.status not in valid_statuses:
-        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status. Must be one of: {valid_statuses}",
+        )
 
     disc.status = data.status
     session.add(disc)

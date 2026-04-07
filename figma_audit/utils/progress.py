@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 console = Console()
 
@@ -85,9 +83,9 @@ class RunProgress:
         total_tokens = sum(r.tokens for r in self.phase_results)
         total_cost = sum(r.cost for r in self.phase_results)
 
-        console.print(f"\n{'='*60}")
+        console.print(f"\n{'=' * 60}")
         console.print("[bold]Recap du run[/bold]")
-        console.print(f"{'='*60}")
+        console.print(f"{'=' * 60}")
 
         for r in self.phase_results:
             idx = self.phases.index(r.name) + 1 if r.name in self.phases else "?"
@@ -95,7 +93,9 @@ class RunProgress:
             dur = _format_duration(r.duration)
             cost_str = f"~${r.cost:.3f}" if r.cost > 0 else ""
             detail = r.detail or ""
-            console.print(f"  [{idx}/{len(self.phases)}] {label:20s} {dur:>8s}  {detail:20s}  {cost_str}")
+            console.print(
+                f"  [{idx}/{len(self.phases)}] {label:20s} {dur:>8s}  {detail:20s}  {cost_str}"
+            )
 
         console.print(f"\n  [bold]Total: {_format_duration(total_duration)}[/bold]", end="")
         if total_tokens:
@@ -117,8 +117,10 @@ class RunProgress:
                     "name": p,
                     "label": PHASE_LABELS.get(p, p),
                     "status": (
-                        "completed" if any(r.name == p for r in self.phase_results)
-                        else "running" if p == self.current_phase
+                        "completed"
+                        if any(r.name == p for r in self.phase_results)
+                        else "running"
+                        if p == self.current_phase
                         else "pending"
                     ),
                     "duration": next((r.duration for r in self.phase_results if r.name == p), None),

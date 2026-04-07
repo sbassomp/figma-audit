@@ -70,7 +70,8 @@ class TokenUsage:
         c = self.cost(model)
         parts = [
             f"{self.calls} appels API",
-            f"{self.input_tokens:,} input + {self.output_tokens:,} output = {self.total_tokens:,} tokens",
+            f"{self.input_tokens:,} input + {self.output_tokens:,} output"
+            f" = {self.total_tokens:,} tokens",
             f"~${c:.3f}",
         ]
         return " | ".join(parts)
