@@ -41,3 +41,4 @@ debug-*.png
 .mypy_cache/
 htmlcov/
 .coverage
+CLAUDE.md
