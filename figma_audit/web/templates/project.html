@@ -9,8 +9,7 @@
   </div>
   <div class="flex gap-1">
     <a href="/projects/{{ project.slug }}/screens" class="btn">Ecrans Figma</a>
-    <form method="POST" action="/projects/{{ project.slug }}/upload-screens" enctype="multipart/form-data" class="flex gap-1 items-center"
-          onsubmit="this.querySelector('button').textContent='Import en cours...'; this.querySelector('button').disabled=true;">
+    <form hx-post="/projects/{{ project.slug }}/upload-screens" hx-target="#upload-area" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="flex gap-1 items-center">
       <input type="file" name="file" accept=".zip" style="max-width: 200px;" required>
       <button type="submit" class="btn">Importer Figma</button>
     </form>
@@ -19,6 +18,8 @@
     </form>
   </div>
 </div>
+
+<div id="upload-area"></div>
 
 <div class="stats-grid">
   <div class="stat-card">

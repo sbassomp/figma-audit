@@ -132,120 +132,201 @@ def create_project_form(
     return RedirectResponse(f"/projects/{slug}", status_code=303)
 
 
-@router.post("/projects/{slug}/upload-screens")
+# Global upload progress state (per project slug)
+_upload_progress: dict[str, dict] = {}
+
+
+@router.post("/projects/{slug}/upload-screens", response_class=HTMLResponse)
 def upload_screens(
+    request: Request,
     slug: str,
     file: UploadFile,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
-    """Upload a Figma Desktop export ZIP and import screens."""
-    import json
-    import re
+    """Upload a Figma export ZIP. Returns progress fragment, processes in background."""
     import shutil
-    import subprocess
     import tempfile
-    import zipfile
 
     project = session.exec(select(Project).where(Project.slug == slug)).first()
     if not project:
-        return RedirectResponse("/", status_code=303)
-
-    output_dir = Path(project.output_dir).expanduser().resolve()
-    screens_dir = output_dir / "figma_screens"
-    screens_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = output_dir / "figma_manifest.json"
+        return "<div>Projet non trouve</div>"
 
     # Save uploaded file to temp
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
         shutil.copyfileobj(file.file, tmp)
-        tmp_path = Path(tmp.name)
+        tmp_path = tmp.name
+
+    # Init progress
+    _upload_progress[slug] = {
+        "steps": [
+            {"label": "Extraction du ZIP", "status": "running", "detail": ""},
+            {"label": "Conversion PDF → PNG", "status": "pending", "detail": ""},
+            {"label": "Matching avec le manifest", "status": "pending", "detail": ""},
+            {"label": "Synchronisation DB", "status": "pending", "detail": ""},
+        ],
+        "progress_current": 0,
+        "progress_total": 0,
+        "done": False,
+        "error": None,
+    }
+
+    background_tasks.add_task(
+        _process_upload_bg, slug, tmp_path, project.id
+    )
+
+    # Return initial progress fragment
+    tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
+    from jinja2 import Environment, FileSystemLoader
+
+    env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
+    tmpl = env.get_template("upload_progress.html")
+    return HTMLResponse(tmpl.render(
+        slug=slug,
+        polling=True,
+        **_upload_progress[slug],
+    ))
+
+
+def _process_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
+    """Process ZIP upload in background, updating progress state."""
+    import json
+    import re
+    import shutil
+    import subprocess
+    import zipfile
+
+    from sqlmodel import Session, select
+
+    from figma_audit.db.engine import get_engine
+    from figma_audit.db.models import Project
+    from figma_audit.db.models import Screen as DBScreen
+
+    progress = _upload_progress[slug]
 
     try:
-        # Extract ZIP
-        extract_dir = Path(tempfile.mkdtemp())
-        with zipfile.ZipFile(tmp_path) as zf:
-            zf.extractall(extract_dir)
+        engine = get_engine()
+        with Session(engine) as session:
+            project = session.get(Project, project_id)
+            if not project:
+                progress["error"] = "Projet non trouve"
+                progress["done"] = True
+                return
 
-        def slugify(name: str) -> str:
-            s = re.sub(r"[^\w\s-]", "", name.lower().strip())
-            s = re.sub(r"[\s_]+", "-", s)
-            return re.sub(r"-+", "-", s).strip("-")
+            output_dir = Path(project.output_dir).expanduser().resolve()
+            screens_dir = output_dir / "figma_screens"
+            screens_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = output_dir / "figma_manifest.json"
 
-        # Convert PDFs to PNGs
-        converted = 0
-        for pdf in extract_dir.glob("*.pdf"):
-            slug_name = slugify(pdf.stem)
-            dest = screens_dir / f"{slug_name}.png"
-            if dest.exists() and dest.stat().st_size > 0:
-                converted += 1
-                continue
-            try:
-                subprocess.run(
-                    [
-                        "pdftoppm",
-                        "-png",
-                        "-r",
-                        "150",
-                        "-singlefile",
-                        str(pdf),
-                        str(dest.with_suffix("")),
-                    ],
-                    capture_output=True,
-                    timeout=10,
-                    check=True,
-                )
-                converted += 1
-            except Exception:
-                pass  # PDF conversion failure is non-blocking (skip file)
+            def slugify(name: str) -> str:
+                s = re.sub(r"[^\w\s-]", "", name.lower().strip())
+                s = re.sub(r"[\s_]+", "-", s)
+                return re.sub(r"-+", "-", s).strip("-")
 
-        # Copy PNGs directly
-        for png in extract_dir.glob("*.png"):
-            slug_name = slugify(png.stem)
-            dest = screens_dir / f"{slug_name}.png"
-            if not dest.exists():
-                shutil.copy2(png, dest)
-                converted += 1
+            # Step 1: Extract ZIP
+            extract_dir = Path(shutil.mkdtemp())
+            with zipfile.ZipFile(tmp_path) as zf:
+                zf.extractall(extract_dir)
+            progress["steps"][0]["status"] = "done"
+            progress["steps"][0]["detail"] = f"{len(list(extract_dir.iterdir()))} fichiers"
 
-        # Match to manifest if it exists
-        if manifest_path.exists():
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-            available = {p.stem: p.name for p in screens_dir.glob("*.png")}
-            for screen in manifest["screens"]:
-                if screen.get("image_path") and (output_dir / screen["image_path"]).exists():
-                    continue
-                s = slugify(screen["name"])
-                if s in available:
-                    screen["image_path"] = f"figma_screens/{available[s]}"
+            # Step 2: Convert PDFs to PNGs
+            progress["steps"][1]["status"] = "running"
+            pdfs = list(extract_dir.glob("*.pdf"))
+            pngs_src = list(extract_dir.glob("*.png"))
+            progress["progress_total"] = len(pdfs) + len(pngs_src)
+            progress["progress_current"] = 0
+
+            converted = 0
+            for pdf in pdfs:
+                slug_name = slugify(pdf.stem)
+                dest = screens_dir / f"{slug_name}.png"
+                if dest.exists() and dest.stat().st_size > 0:
+                    converted += 1
                 else:
-                    for png_slug, png_name in available.items():
-                        if s.replace("-", "") == png_slug.replace("-", ""):
-                            screen["image_path"] = f"figma_screens/{png_name}"
-                            break
-            with open(manifest_path, "w") as f:
-                json.dump(manifest, f, indent=2, ensure_ascii=False)
+                    try:
+                        dest_stem = str(dest.with_suffix(""))
+                        subprocess.run(
+                            ["pdftoppm", "-png", "-r", "150", "-singlefile", str(pdf), dest_stem],
+                            capture_output=True,
+                            timeout=10,
+                            check=True,
+                        )
+                        converted += 1
+                    except Exception:
+                        pass
+                progress["progress_current"] += 1
 
-        # Sync to DB
-        if manifest_path.exists():
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-            manifest_images = {
-                s["id"]: s["image_path"] for s in manifest["screens"] if s.get("image_path")
-            }
-            from figma_audit.db.models import Screen as DBScreen
+            for png in pngs_src:
+                slug_name = slugify(png.stem)
+                dest = screens_dir / f"{slug_name}.png"
+                if not dest.exists():
+                    shutil.copy2(png, dest)
+                    converted += 1
+                progress["progress_current"] += 1
 
-            for sc in session.exec(select(DBScreen).where(DBScreen.project_id == project.id)).all():
-                new_path = manifest_images.get(sc.figma_node_id)
-                if new_path and sc.image_path != new_path:
-                    sc.image_path = new_path
-                    session.add(sc)
-            session.commit()
+            progress["steps"][1]["status"] = "done"
+            progress["steps"][1]["detail"] = f"{converted} images"
+            progress["progress_current"] = 0
+            progress["progress_total"] = 0
 
-        shutil.rmtree(extract_dir, ignore_errors=True)
+            # Step 3: Match to manifest
+            progress["steps"][2]["status"] = "running"
+            matched = 0
+            if manifest_path.exists():
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                available = {p.stem: p.name for p in screens_dir.glob("*.png")}
+                for screen in manifest["screens"]:
+                    if screen.get("image_path") and (output_dir / screen["image_path"]).exists():
+                        matched += 1
+                        continue
+                    s = slugify(screen["name"])
+                    if s in available:
+                        screen["image_path"] = f"figma_screens/{available[s]}"
+                        matched += 1
+                    else:
+                        for png_slug, png_name in available.items():
+                            if s.replace("-", "") == png_slug.replace("-", ""):
+                                screen["image_path"] = f"figma_screens/{png_name}"
+                                matched += 1
+                                break
+                with open(manifest_path, "w") as f:
+                    json.dump(manifest, f, indent=2, ensure_ascii=False)
+            progress["steps"][2]["status"] = "done"
+            progress["steps"][2]["detail"] = f"{matched} matches"
+
+            # Step 4: Sync to DB
+            progress["steps"][3]["status"] = "running"
+            if manifest_path.exists():
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                manifest_images = {
+                    s["id"]: s["image_path"]
+                    for s in manifest["screens"]
+                    if s.get("image_path")
+                }
+                updated = 0
+                db_screens = session.exec(
+                    select(DBScreen).where(DBScreen.project_id == project.id)
+                ).all()
+                for sc in db_screens:
+                    new_path = manifest_images.get(sc.figma_node_id)
+                    if new_path and sc.image_path != new_path:
+                        sc.image_path = new_path
+                        session.add(sc)
+                        updated += 1
+                session.commit()
+                progress["steps"][3]["detail"] = f"{updated} maj"
+
+            progress["steps"][3]["status"] = "done"
+            shutil.rmtree(extract_dir, ignore_errors=True)
+
+    except Exception as e:
+        progress["error"] = str(e)[:200]
     finally:
-        tmp_path.unlink(missing_ok=True)
-
-    return RedirectResponse(f"/projects/{slug}/screens", status_code=303)
+        Path(tmp_path).unlink(missing_ok=True)
+        progress["done"] = True
 
 
 @router.post("/projects/{slug}/start-run")

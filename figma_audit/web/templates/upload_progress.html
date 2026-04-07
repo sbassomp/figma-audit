@@ -1,0 +1,54 @@
+<div id="upload-progress"
+     {% if polling %}hx-get="/htmx/projects/{{ slug }}/upload-progress" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+  <div class="card" style="margin-top: 1rem;">
+    <h3 style="color: var(--accent);">Import Figma</h3>
+    <div style="margin-top: 0.75rem;">
+      {% for step in steps %}
+      <div class="flex items-center gap-2 mb-1">
+        <div style="width: 20px; text-align: center;">
+          {% if step.status == 'done' %}
+            <span style="color: var(--good);">&#10003;</span>
+          {% elif step.status == 'running' %}
+            <span style="color: var(--accent);">&#9679;</span>
+          {% else %}
+            <span style="color: var(--text-muted);">&#9675;</span>
+          {% endif %}
+        </div>
+        <div style="flex: 1; font-size: 0.85rem; {% if step.status == 'running' %}color: var(--accent); font-weight: 600;{% elif step.status == 'pending' %}color: var(--text-muted);{% endif %}">
+          {{ step.label }}
+        </div>
+        <div class="text-xs text-muted" style="width: 60px; text-align: right;">
+          {% if step.detail %}{{ step.detail }}{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+
+      {% if progress_current and progress_total %}
+      <div style="margin-top: 0.5rem; padding-left: 28px;">
+        <div style="background: var(--surface2); border-radius: 4px; height: 8px; overflow: hidden;">
+          <div style="background: var(--accent); height: 100%; width: {{ (progress_current / progress_total * 100) | int }}%; transition: width 0.3s;"></div>
+        </div>
+        <div class="text-xs text-muted" style="margin-top: 0.25rem;">{{ progress_current }}/{{ progress_total }}</div>
+      </div>
+      {% endif %}
+
+      {% if error %}
+      <div class="text-sm" style="color: var(--critical); margin-top: 0.5rem; padding-left: 28px;">{{ error }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if done %}
+  <script>setTimeout(function(){ window.location.href = '/projects/{{ slug }}/screens'; }, 1000);</script>
+  {% endif %}
+</div>
+
+<style>
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+#upload-progress [style*="color: var(--accent)"] span {
+  animation: pulse-dot 1.5s infinite;
+}
+</style>

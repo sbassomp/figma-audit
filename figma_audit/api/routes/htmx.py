@@ -100,6 +100,33 @@ def _screen_card_html(s: Screen, slug: str) -> str:
   </div>"""
 
 
+@router.get("/upload-progress", response_class=HTMLResponse)
+def upload_progress(
+    slug: str,
+    project: Project = Depends(get_project),
+) -> str:
+    """Return upload progress HTML fragment, polled by htmx."""
+    from pathlib import Path
+
+    from jinja2 import Environment, FileSystemLoader
+
+    from figma_audit.api.routes.web import _upload_progress
+
+    tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
+    env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
+    tmpl = env.get_template("upload_progress.html")
+
+    progress = _upload_progress.get(slug, {})
+    if not progress:
+        return "<div></div>"
+
+    return tmpl.render(
+        slug=slug,
+        polling=not progress.get("done", False),
+        **progress,
+    )
+
+
 @router.get("/runs/{run_id}/progress", response_class=HTMLResponse)
 def run_progress(
     slug: str,
