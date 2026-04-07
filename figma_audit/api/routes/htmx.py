@@ -162,6 +162,7 @@ def run_progress(
             current_progress=data.get("current_progress", 0),
             current_total=data.get("current_total", 0),
             elapsed=data.get("elapsed"),
+            run_error=None,
             polling=True,
         )
 
@@ -176,6 +177,7 @@ def run_progress(
             current_progress=0,
             current_total=0,
             elapsed=data.get("elapsed"),
+            run_error=run.error,
             polling=False,
         )
 
@@ -200,6 +202,7 @@ def run_progress(
         current_progress=0,
         current_total=0,
         elapsed=None,
+        run_error=run.error,
         polling=False,
     )
 

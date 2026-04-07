@@ -47,6 +47,13 @@
     </div>
     {% endif %}
 
+    {% if run_error %}
+    <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--critical-bg); border: 1px solid var(--critical); border-radius: 8px;">
+      <div style="color: var(--critical); font-weight: 600; margin-bottom: 0.25rem;">Erreur</div>
+      <div class="text-sm" style="color: var(--critical);">{{ run_error }}</div>
+    </div>
+    {% endif %}
+
     {% if elapsed %}
     <div class="text-xs text-muted mt-2" style="padding-left: 28px;">
       Temps ecoule: {{ "%.0f" | format(elapsed) }}s
