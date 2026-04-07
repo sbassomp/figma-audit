@@ -468,6 +468,11 @@ async def _run_async(config: Config) -> Path:
 
     screenshots_dir.mkdir(parents=True, exist_ok=True)
 
+    # Override test_data credentials with config if available
+    if config.test_credentials.email:
+        test_data["email"] = config.test_credentials.email
+        test_data["otp"] = config.test_credentials.otp
+
     # Populate app with test data via API (if credentials available)
     created_course_ids = []
     seed_account = config.seed_account.model_dump() if config.seed_account.email else None

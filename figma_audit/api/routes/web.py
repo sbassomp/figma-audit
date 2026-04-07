@@ -171,9 +171,7 @@ def upload_screens(
         "error": None,
     }
 
-    background_tasks.add_task(
-        _process_upload_bg, slug, tmp_path, project.id
-    )
+    background_tasks.add_task(_process_upload_bg, slug, tmp_path, project.id)
 
     # Return initial progress fragment
     tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
@@ -181,11 +179,13 @@ def upload_screens(
 
     env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
     tmpl = env.get_template("upload_progress.html")
-    return HTMLResponse(tmpl.render(
-        slug=slug,
-        polling=True,
-        **_upload_progress[slug],
-    ))
+    return HTMLResponse(
+        tmpl.render(
+            slug=slug,
+            polling=True,
+            **_upload_progress[slug],
+        )
+    )
 
 
 def _process_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
@@ -304,9 +304,7 @@ def _process_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
                 with open(manifest_path) as f:
                     manifest = json.load(f)
                 manifest_images = {
-                    s["id"]: s["image_path"]
-                    for s in manifest["screens"]
-                    if s.get("image_path")
+                    s["id"]: s["image_path"] for s in manifest["screens"] if s.get("image_path")
                 }
                 updated = 0
                 db_screens = session.exec(
@@ -353,7 +351,6 @@ def start_run(
 def _run_pipeline_bg(project_id: int, run_id: int) -> None:
     """Execute the full pipeline in background with proper config."""
     import json
-    import os
     from datetime import datetime, timezone
 
     from figma_audit.db.engine import get_engine
@@ -376,13 +373,24 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
         try:
             from figma_audit.config import Config
 
-            cfg = Config(
+            # Try loading project config YAML if it exists
+            config_candidates = [
+                Path(project.output_dir).parent / "figma-audit.yaml",
+                Path(project.output_dir) / "figma-audit.yaml",
+                Path.home() / "dev" / "figma-audit" / "figma-audit.yaml",
+            ]
+            config_path = None
+            for cp in config_candidates:
+                if cp.exists():
+                    config_path = cp
+                    break
+
+            cfg = Config.load(
+                config_path=config_path,
                 project=project.project_path,
                 figma_url=project.figma_url,
                 app_url=project.app_url,
                 output=project.output_dir,
-                figma_token=os.environ.get("FIGMA_TOKEN"),
-                anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY"),
             )
 
             phases = ["analyze", "figma", "match", "capture", "compare", "report"]

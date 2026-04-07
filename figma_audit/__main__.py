@@ -600,9 +600,7 @@ def _has_systemd() -> bool:
     import subprocess
 
     try:
-        result = subprocess.run(
-            ["systemctl", "--version"], capture_output=True, timeout=5
-        )
+        result = subprocess.run(["systemctl", "--version"], capture_output=True, timeout=5)
         return result.returncode == 0
     except Exception:
         return False  # systemd not available, not an error

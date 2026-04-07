@@ -23,6 +23,11 @@ class ViewportConfig(BaseModel):
     device_scale_factor: int = 2
 
 
+class TestCredentials(BaseModel):
+    email: str | None = None
+    otp: str = "1234"
+
+
 class SeedAccountConfig(BaseModel):
     email: str | None = None
     otp: str = "1234"
@@ -44,6 +49,7 @@ class Config(BaseModel):
     figma: FigmaConfig = Field(default_factory=FigmaConfig)
     viewport: ViewportConfig = Field(default_factory=ViewportConfig)
     thresholds: ThresholdsConfig = Field(default_factory=ThresholdsConfig)
+    test_credentials: TestCredentials = Field(default_factory=TestCredentials)
     seed_account: SeedAccountConfig = Field(default_factory=SeedAccountConfig)
     include_routes: list[str] = Field(default_factory=list)
     exclude_routes: list[str] = Field(default_factory=list)
