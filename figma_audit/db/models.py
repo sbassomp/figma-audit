@@ -20,6 +20,10 @@ class Project(SQLModel, table=True):
     project_path: str | None = None
     config_yaml: str | None = None
     output_dir: str = "./output"
+    test_email: str | None = None
+    test_otp: str = "1234"
+    seed_email: str | None = None
+    seed_otp: str = "1234"
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 

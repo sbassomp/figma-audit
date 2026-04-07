@@ -29,6 +29,32 @@
       <label for="output_dir">Repertoire de sortie</label>
       <input type="text" id="output_dir" name="output_dir" value="./output" placeholder="./output">
     </div>
+
+    <div style="border-top: 1px solid var(--border); margin: 1.5rem 0; padding-top: 1rem;">
+      <h3 style="font-size: 0.9rem; color: var(--accent); margin-bottom: 0.75rem;">Authentification de l'application</h3>
+      <div class="form-group">
+        <label for="test_email">Email de connexion</label>
+        <input type="email" id="test_email" name="test_email" placeholder="test@example.com">
+      </div>
+      <div class="form-group">
+        <label for="test_otp">Code OTP</label>
+        <input type="text" id="test_otp" name="test_otp" value="1234" placeholder="1234">
+      </div>
+    </div>
+
+    <div style="border-top: 1px solid var(--border); margin: 1.5rem 0; padding-top: 1rem;">
+      <h3 style="font-size: 0.9rem; color: var(--accent); margin-bottom: 0.75rem;">Donnees de test (optionnel)</h3>
+      <div class="form-group">
+        <label for="seed_email">Email du compte de seed</label>
+        <input type="email" id="seed_email" name="seed_email" placeholder="deposant@example.com">
+        <div class="text-xs text-muted" style="margin-top: 0.25rem;">Compte secondaire pour creer des donnees visibles par le compte principal</div>
+      </div>
+      <div class="form-group">
+        <label for="seed_otp">Code OTP du seed</label>
+        <input type="text" id="seed_otp" name="seed_otp" value="1234" placeholder="1234">
+      </div>
+    </div>
+
     <div class="flex gap-1 mt-2">
       <button type="submit" class="btn btn-primary">Creer le projet</button>
       <a href="/" class="btn">Annuler</a>

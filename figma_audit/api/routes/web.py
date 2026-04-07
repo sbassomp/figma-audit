@@ -112,6 +112,10 @@ def create_project_form(
     app_url: str = Form(""),
     project_path: str = Form(""),
     output_dir: str = Form("./output"),
+    test_email: str = Form(""),
+    test_otp: str = Form("1234"),
+    seed_email: str = Form(""),
+    seed_otp: str = Form("1234"),
     session: Session = Depends(get_session),
 ):
     import re
@@ -126,6 +130,10 @@ def create_project_form(
         app_url=app_url or None,
         project_path=project_path or None,
         output_dir=output_dir,
+        test_email=test_email or None,
+        test_otp=test_otp,
+        seed_email=seed_email or None,
+        seed_otp=seed_otp,
     )
     session.add(project)
     session.commit()
@@ -392,6 +400,14 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
                 app_url=project.app_url,
                 output=project.output_dir,
             )
+
+            # Override credentials from project DB (set via web form)
+            if project.test_email:
+                cfg.test_credentials.email = project.test_email
+                cfg.test_credentials.otp = project.test_otp
+            if project.seed_email:
+                cfg.seed_account.email = project.seed_email
+                cfg.seed_account.otp = project.seed_otp
 
             phases = ["analyze", "figma", "match", "capture", "compare", "report"]
 
