@@ -8,12 +8,14 @@
           {% if phase.status == 'completed' %}
             <span style="color: var(--good);">&#10003;</span>
           {% elif phase.status == 'running' %}
-            <span style="color: var(--accent);">&#9679;</span>
+            <span class="pulse-dot" style="color: var(--accent);">&#9679;</span>
+          {% elif phase.status == 'failed' %}
+            <span style="color: var(--critical);">&#10007;</span>
           {% else %}
             <span style="color: var(--text-muted);">&#9675;</span>
           {% endif %}
         </div>
-        <div style="width: 140px; font-size: 0.85rem; {% if phase.status == 'running' %}color: var(--accent); font-weight: 600;{% elif phase.status == 'pending' %}color: var(--text-muted);{% endif %}">
+        <div style="width: 140px; font-size: 0.85rem; {% if phase.status == 'running' %}color: var(--accent); font-weight: 600;{% elif phase.status == 'failed' %}color: var(--critical); font-weight: 600;{% elif phase.status == 'pending' %}color: var(--text-muted);{% endif %}">
           {{ phase.label }}
         </div>
         <div style="flex: 1;">
@@ -23,14 +25,14 @@
           </div>
           {% elif phase.status == 'running' %}
           <div style="background: var(--surface2); border-radius: 4px; height: 8px; overflow: hidden;">
-            <div style="background: var(--accent); height: 100%; width: 100%; opacity: 0.3; animation: pulse 1.5s infinite;"></div>
+            <div class="pulse-bar"></div>
           </div>
           {% endif %}
         </div>
         <div class="text-xs text-muted" style="width: 80px; text-align: right;">
           {% if phase.duration %}{{ "%.1f" | format(phase.duration) }}s{% endif %}
         </div>
-        <div class="text-xs text-muted" style="width: 100px;">
+        <div class="text-xs" style="width: 140px; {% if phase.status == 'running' %}color: var(--accent);{% else %}color: var(--text-muted);{% endif %}">
           {{ phase.detail or '' }}
         </div>
         <div class="text-xs text-muted" style="width: 60px; text-align: right;">
@@ -41,22 +43,37 @@
     </div>
 
     {% if current_step %}
-    <div class="text-xs text-muted mt-1" style="padding-left: 28px;">
+    <div class="text-xs mt-1" style="padding-left: 28px; color: var(--accent);">
       {{ current_step }}
-      {% if current_total > 0 %}({{ current_progress }}/{{ current_total }}){% endif %}
+      {% if current_total > 0 %} ({{ current_progress }}/{{ current_total }}){% endif %}
     </div>
     {% endif %}
 
     {% if run_error %}
     <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--critical-bg); border: 1px solid var(--critical); border-radius: 8px;">
       <div style="color: var(--critical); font-weight: 600; margin-bottom: 0.25rem;">Erreur</div>
-      <div class="text-sm" style="color: var(--critical);">{{ run_error }}</div>
+      <div class="text-sm" style="color: var(--critical); white-space: pre-wrap;">{{ run_error }}</div>
     </div>
     {% endif %}
 
-    {% if elapsed %}
+    {% if polling %}
     <div class="text-xs text-muted mt-2" style="padding-left: 28px;">
-      Temps ecoule: {{ "%.0f" | format(elapsed) }}s
+      Temps ecoule: <span id="elapsed-timer">{{ "%.0f" | format(elapsed or 0) }}</span>s
+    </div>
+    <script>
+      (function() {
+        var el = document.getElementById('elapsed-timer');
+        if (!el) return;
+        var t = parseInt(el.textContent) || 0;
+        var iv = setInterval(function() {
+          t++;
+          if (el.parentNode) { el.textContent = t; } else { clearInterval(iv); }
+        }, 1000);
+      })();
+    </script>
+    {% elif elapsed %}
+    <div class="text-xs text-muted mt-2" style="padding-left: 28px;">
+      Duree totale: {{ "%.0f" | format(elapsed) }}s
     </div>
     {% endif %}
   </div>
@@ -65,6 +82,19 @@
 <style>
 @keyframes pulse {
   0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.6; }
+  50% { opacity: 0.8; }
+}
+.pulse-dot { animation: pulse 1.5s infinite; }
+.pulse-bar {
+  background: var(--accent);
+  height: 100%;
+  width: 30%;
+  border-radius: 4px;
+  animation: slide 1.5s ease-in-out infinite;
+}
+@keyframes slide {
+  0% { margin-left: 0; }
+  50% { margin-left: 70%; }
+  100% { margin-left: 0; }
 }
 </style>

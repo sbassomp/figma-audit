@@ -393,16 +393,22 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
                 session.add(run)
                 session.commit()
 
+            def _step(msg: str) -> None:
+                progress.update(step=msg)
+                _save_progress()
+
             for phase_name in phases:
                 progress.start_phase(phase_name)
                 _save_progress()
 
                 if phase_name == "analyze":
+                    _step("Lecture des fichiers source (~133K tokens)...")
                     from figma_audit.phases.analyze_code import run as run_analyze
 
                     run_analyze(cfg)
 
                 elif phase_name == "figma":
+                    _step("Lecture du cache Figma...")
                     from figma_audit.phases.export_figma import run as run_figma
 
                     run_figma(cfg, offline=True)
@@ -410,6 +416,7 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
                 elif phase_name == "match":
                     import yaml
 
+                    _step("Envoi des ecrans a Claude Vision...")
                     from figma_audit.phases.match_screens import run as run_match
 
                     mapping_path = run_match(cfg)
@@ -427,16 +434,19 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
                             )
 
                 elif phase_name == "capture":
+                    _step("Login + creation donnees de test...")
                     from figma_audit.phases.capture_app import run as run_capture
 
                     run_capture(cfg)
 
                 elif phase_name == "compare":
+                    _step("Comparaison Figma vs App par Claude Vision...")
                     from figma_audit.phases.compare import run as run_compare
 
                     run_compare(cfg)
 
                 elif phase_name == "report":
+                    _step("Generation du rapport HTML...")
                     from figma_audit.phases.report import run as run_report
 
                     run_report(cfg)
