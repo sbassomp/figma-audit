@@ -33,13 +33,22 @@
       {% endif %}
 
       {% if error %}
-      <div class="text-sm" style="color: var(--critical); margin-top: 0.5rem; padding-left: 28px;">{{ error }}</div>
+      <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--critical-bg); border: 1px solid var(--critical); border-radius: 8px;">
+        <div style="color: var(--critical); font-weight: 600; margin-bottom: 0.25rem;">Erreur</div>
+        <div class="text-sm" style="color: var(--critical);">{{ error }}</div>
+      </div>
       {% endif %}
     </div>
+
+    {% if done and not error %}
+    <div style="margin-top: 0.75rem; padding: 0.75rem; background: #14532d; border: 1px solid var(--good); border-radius: 8px;">
+      <span style="color: #86efac;">Import termine. Redirection...</span>
+    </div>
+    {% endif %}
   </div>
 
-  {% if done %}
-  <script>setTimeout(function(){ window.location.href = '/projects/{{ slug }}/screens'; }, 1000);</script>
+  {% if done and not error %}
+  <script>setTimeout(function(){ window.location.href = '/projects/{{ slug }}/screens'; }, 2000);</script>
   {% endif %}
 </div>
 
