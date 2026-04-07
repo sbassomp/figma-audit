@@ -9,7 +9,8 @@
   </div>
   <div class="flex gap-1">
     <a href="/projects/{{ project.slug }}/screens" class="btn">Ecrans Figma</a>
-    <form method="POST" action="/projects/{{ project.slug }}/upload-screens" enctype="multipart/form-data" class="flex gap-1 items-center">
+    <form method="POST" action="/projects/{{ project.slug }}/upload-screens" enctype="multipart/form-data" class="flex gap-1 items-center"
+          onsubmit="this.querySelector('button').textContent='Import en cours...'; this.querySelector('button').disabled=true;">
       <input type="file" name="file" accept=".zip" style="max-width: 200px;" required>
       <button type="submit" class="btn">Importer Figma</button>
     </form>
