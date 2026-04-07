@@ -1,0 +1,65 @@
+stages:
+  - test
+  - build
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+# Cache pip downloads between jobs
+cache:
+  key: pip-${CI_COMMIT_REF_SLUG}
+  paths:
+    - .pip-cache/
+    - .venv/
+
+# ──────────────────────────────────────────────
+# Lint: ruff check + format
+# ──────────────────────────────────────────────
+lint:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - python -m venv .venv
+    - . .venv/bin/activate
+    - pip install -q ruff
+  script:
+    - ruff check figma_audit/
+    - ruff format --check figma_audit/
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+# ──────────────────────────────────────────────
+# Tests unitaires
+# ──────────────────────────────────────────────
+test:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - python -m venv .venv
+    - . .venv/bin/activate
+    - pip install -q -e ".[dev]"
+  script:
+    - pytest tests/ -v --tb=short --junitxml=report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+# ──────────────────────────────────────────────
+# Build: verifier que le package s'installe
+# ──────────────────────────────────────────────
+build:
+  stage: build
+  image: python:3.12-slim
+  before_script:
+    - python -m venv .venv
+    - . .venv/bin/activate
+  script:
+    - pip install -q -e .
+    - figma-audit --version
+    - echo "Build $CI_PIPELINE_ID OK"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
