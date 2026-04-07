@@ -28,17 +28,17 @@ class TestProjects:
         client = _make_client()
 
         # Create
-        r = client.post("/api/projects", json={"name": "MedExchange", "app_url": "https://example.com"})
+        r = client.post("/api/projects", json={"name": "My App", "app_url": "https://example.com"})
         assert r.status_code == 201
         data = r.json()
-        assert data["slug"] == "medexchange"
+        assert data["slug"] == "my-app"
 
         # List
         r = client.get("/api/projects")
         assert r.status_code == 200
         projects = r.json()
         assert len(projects) == 1
-        assert projects[0]["name"] == "MedExchange"
+        assert projects[0]["name"] == "My App"
 
     def test_get_project(self):
         client = _make_client()

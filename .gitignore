@@ -29,6 +29,9 @@ Thumbs.db
 # Tools config (not project code)
 tools.yaml
 
+# Local config (use figma-audit.example.yaml as template)
+figma-audit.yaml
+
 # Debug
 debug-*.png
 

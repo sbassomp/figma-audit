@@ -306,7 +306,7 @@ Le cout est affiche en temps reel pendant l'execution et dans le recap final.
 ## Developpement
 
 ```bash
-git clone https://git.gardendwarf.org/softs/figma-audit.git
+git clone <your-repo-url>/figma-audit.git
 cd figma-audit
 python -m venv .venv
 source .venv/bin/activate

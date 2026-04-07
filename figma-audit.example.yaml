@@ -1,0 +1,26 @@
+project: ~/dev/my-project
+figma_url: "https://www.figma.com/design/XXXXXX/My-Project"
+app_url: "https://my-app.example.com"
+output: ./output
+
+viewport:
+  width: 390
+  height: 844
+  device_scale_factor: 1
+
+figma:
+  cache_dir: figma_raw
+  request_delay: 3.0
+  batch_size: 8
+  retry_wait_default: 60
+  max_retries: 5
+
+thresholds:
+  color_delta_e: 5.0
+  font_size_tolerance: 2
+  spacing_tolerance: 4
+
+# Optional: second account to seed test data (courses visible to main user)
+# seed_account:
+#   email: "test@example.com"
+#   otp: "1234"
