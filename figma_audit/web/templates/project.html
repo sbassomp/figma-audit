@@ -9,6 +9,10 @@
   </div>
   <div class="flex gap-1">
     <a href="/projects/{{ project.slug }}/screens" class="btn">Ecrans Figma</a>
+    <form method="POST" action="/projects/{{ project.slug }}/upload-screens" enctype="multipart/form-data" class="flex gap-1 items-center">
+      <input type="file" name="file" accept=".zip" style="max-width: 200px;" required>
+      <button type="submit" class="btn">Importer Figma</button>
+    </form>
     <form method="POST" action="/projects/{{ project.slug }}/start-run">
       <button type="submit" class="btn btn-primary">Lancer un run</button>
     </form>

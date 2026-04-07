@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, func, select
@@ -111,6 +111,109 @@ def create_project_form(
     session.add(project)
     session.commit()
     return RedirectResponse(f"/projects/{slug}", status_code=303)
+
+
+@router.post("/projects/{slug}/upload-screens")
+def upload_screens(
+    slug: str,
+    file: UploadFile,
+    session: Session = Depends(get_session),
+):
+    """Upload a Figma Desktop export ZIP and import screens."""
+    import json
+    import re
+    import shutil
+    import subprocess
+    import tempfile
+    import zipfile
+
+    project = session.exec(select(Project).where(Project.slug == slug)).first()
+    if not project:
+        return RedirectResponse("/", status_code=303)
+
+    output_dir = Path(project.output_dir).expanduser().resolve()
+    screens_dir = output_dir / "figma_screens"
+    screens_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = output_dir / "figma_manifest.json"
+
+    # Save uploaded file to temp
+    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = Path(tmp.name)
+
+    try:
+        # Extract ZIP
+        extract_dir = Path(tempfile.mkdtemp())
+        with zipfile.ZipFile(tmp_path) as zf:
+            zf.extractall(extract_dir)
+
+        def slugify(name: str) -> str:
+            s = re.sub(r"[^\w\s-]", "", name.lower().strip())
+            s = re.sub(r"[\s_]+", "-", s)
+            return re.sub(r"-+", "-", s).strip("-")
+
+        # Convert PDFs to PNGs
+        converted = 0
+        for pdf in extract_dir.glob("*.pdf"):
+            slug_name = slugify(pdf.stem)
+            dest = screens_dir / f"{slug_name}.png"
+            if dest.exists() and dest.stat().st_size > 0:
+                converted += 1
+                continue
+            try:
+                subprocess.run(
+                    ["pdftoppm", "-png", "-r", "150", "-singlefile", str(pdf), str(dest.with_suffix(""))],
+                    capture_output=True, timeout=10, check=True,
+                )
+                converted += 1
+            except Exception:
+                pass
+
+        # Copy PNGs directly
+        for png in extract_dir.glob("*.png"):
+            slug_name = slugify(png.stem)
+            dest = screens_dir / f"{slug_name}.png"
+            if not dest.exists():
+                shutil.copy2(png, dest)
+                converted += 1
+
+        # Match to manifest if it exists
+        if manifest_path.exists():
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            available = {p.stem: p.name for p in screens_dir.glob("*.png")}
+            for screen in manifest["screens"]:
+                if screen.get("image_path") and (output_dir / screen["image_path"]).exists():
+                    continue
+                s = slugify(screen["name"])
+                if s in available:
+                    screen["image_path"] = f"figma_screens/{available[s]}"
+                else:
+                    for png_slug, png_name in available.items():
+                        if s.replace("-", "") == png_slug.replace("-", ""):
+                            screen["image_path"] = f"figma_screens/{png_name}"
+                            break
+            with open(manifest_path, "w") as f:
+                json.dump(manifest, f, indent=2, ensure_ascii=False)
+
+        # Sync to DB
+        if manifest_path.exists():
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            manifest_images = {s["id"]: s["image_path"] for s in manifest["screens"] if s.get("image_path")}
+            from figma_audit.db.models import Screen as DBScreen
+            for sc in session.exec(select(DBScreen).where(DBScreen.project_id == project.id)).all():
+                new_path = manifest_images.get(sc.figma_node_id)
+                if new_path and sc.image_path != new_path:
+                    sc.image_path = new_path
+                    session.add(sc)
+            session.commit()
+
+        shutil.rmtree(extract_dir, ignore_errors=True)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+    return RedirectResponse(f"/projects/{slug}/screens", status_code=303)
 
 
 @router.post("/projects/{slug}/start-run")
