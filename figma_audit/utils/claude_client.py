@@ -174,9 +174,18 @@ class ClaudeClient:
                 console.print(f"[yellow]Image not found: {img_path}[/yellow]")
                 continue
 
-            media_type = "image/png" if img_path.suffix == ".png" else "image/jpeg"
             with open(img_path, "rb") as f:
-                data = base64.standard_b64encode(f.read()).decode("utf-8")
+                raw = f.read()
+            # Detect actual image type from magic bytes
+            if raw[:8] == b"\x89PNG\r\n\x1a\n":
+                media_type = "image/png"
+            elif raw[:2] == b"\xff\xd8":
+                media_type = "image/jpeg"
+            elif raw[:4] == b"GIF8":
+                media_type = "image/gif"
+            else:
+                media_type = "image/png"
+            data = base64.standard_b64encode(raw).decode("utf-8")
 
             content.append(
                 {
