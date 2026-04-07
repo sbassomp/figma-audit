@@ -169,21 +169,23 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
 
             phases = ["analyze", "figma", "match", "capture", "compare", "report"]
 
-            for phase_name in phases:
-                run.current_phase = phase_name
+            def _save_progress():
+                run.current_phase = progress.current_phase
+                run.progress_json = json.dumps(progress.to_dict())
                 session.add(run)
                 session.commit()
+
+            for phase_name in phases:
                 progress.start_phase(phase_name)
+                _save_progress()
 
                 if phase_name == "analyze":
                     from figma_audit.phases.analyze_code import run as run_analyze
                     run_analyze(cfg)
-                    progress.finish_phase()
 
                 elif phase_name == "figma":
                     from figma_audit.phases.export_figma import run as run_figma
                     run_figma(cfg, offline=True)
-                    progress.finish_phase()
 
                 elif phase_name == "match":
                     from figma_audit.phases.match_screens import run as run_match
@@ -195,22 +197,21 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
                         data["verified"] = True
                         with open(mapping_path, "w") as f:
                             yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
-                    progress.finish_phase()
 
                 elif phase_name == "capture":
                     from figma_audit.phases.capture_app import run as run_capture
                     run_capture(cfg)
-                    progress.finish_phase()
 
                 elif phase_name == "compare":
                     from figma_audit.phases.compare import run as run_compare
                     run_compare(cfg)
-                    progress.finish_phase()
 
                 elif phase_name == "report":
                     from figma_audit.phases.report import run as run_report
                     run_report(cfg)
-                    progress.finish_phase()
+
+                progress.finish_phase()
+                _save_progress()
 
             # Import results into DB
             from figma_audit.api.routes.runs import _import_results
@@ -298,6 +299,7 @@ def screens_gallery(
 def run_detail(
     request: Request, slug: str, run_id: int,
     severity: str | None = None,
+    status: str | None = None,
     session: Session = Depends(get_session),
 ):
     project = session.exec(select(Project).where(Project.slug == slug)).first()
@@ -313,6 +315,8 @@ def run_detail(
     query = select(Discrepancy).where(Discrepancy.run_id == run_id)
     if severity:
         query = query.where(Discrepancy.severity == severity)
+    if status:
+        query = query.where(Discrepancy.status == status)
     query = query.order_by(Discrepancy.severity, Discrepancy.category)
     discrepancies = session.exec(query).all()
 
@@ -346,6 +350,7 @@ def run_detail(
         },
         "discrepancies": discrepancies,
         "filter_severity": severity,
+        "filter_status": status,
         "pages_with_discs": pages_with_discs,
         "stats": {
             "total_discrepancies": len(all_discs),

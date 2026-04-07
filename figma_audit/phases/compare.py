@@ -189,6 +189,29 @@ def run(config: Config) -> Path:
     figma_screens_by_id = {s["id"]: s for s in figma_manifest.get("screens", [])}
     captures_by_page_id = {c["page_id"]: c for c in captures if c.get("screenshot")}
 
+    # Load obsolete screen IDs from DB (if available)
+    obsolete_screen_ids: set[str] = set()
+    db_path = Path("figma-audit.db")
+    if not db_path.exists():
+        db_path = Path.home() / ".config" / "figma-audit" / "figma-audit.db"
+    if db_path.exists():
+        try:
+            from figma_audit.db.engine import get_engine, init_db
+            from figma_audit.db.models import Screen
+            from sqlmodel import Session, select
+
+            init_db(str(db_path))
+            engine = get_engine(str(db_path))
+            with Session(engine) as session:
+                screens = session.exec(
+                    select(Screen).where(Screen.status == "obsolete")
+                ).all()
+                obsolete_screen_ids = {s.figma_node_id for s in screens}
+            if obsolete_screen_ids:
+                console.print(f"  [dim]{len(obsolete_screen_ids)} ecran(s) obsolete(s) exclus[/dim]")
+        except Exception:
+            pass
+
     # Build comparison pairs from mapping
     pairs = []
     for m in mapping_data.get("mappings", []):
@@ -200,6 +223,8 @@ def run(config: Config) -> Path:
         if not figma_id or not page_id or not route:
             continue
         if confidence < 0.7:
+            continue
+        if figma_id in obsolete_screen_ids:
             continue
 
         figma_screen = figma_screens_by_id.get(figma_id)

@@ -72,9 +72,14 @@
   <div class="flex justify-between items-center mb-1">
     <h3>Ecarts ({{ discrepancies | length }})</h3>
     <div class="flex gap-1">
-      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity=critical" class="btn btn-sm {% if filter_severity == 'critical' %}btn-primary{% endif %}">Critical</a>
-      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity=important" class="btn btn-sm {% if filter_severity == 'important' %}btn-primary{% endif %}">Important</a>
-      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}" class="btn btn-sm {% if not filter_severity %}btn-primary{% endif %}">Tous</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity=critical&status={{ filter_status or '' }}" class="btn btn-sm {% if filter_severity == 'critical' %}btn-primary{% endif %}">Critical</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity=important&status={{ filter_status or '' }}" class="btn btn-sm {% if filter_severity == 'important' %}btn-primary{% endif %}">Important</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?status={{ filter_status or '' }}" class="btn btn-sm {% if not filter_severity %}btn-primary{% endif %}">Toutes severites</a>
+      <span style="border-left: 1px solid var(--border); margin: 0 0.25rem;"></span>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=open" class="btn btn-sm {% if filter_status == 'open' %}btn-primary{% endif %}">Open</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=ignored" class="btn btn-sm {% if filter_status == 'ignored' %}btn-primary{% endif %}">Ignored</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=fixed" class="btn btn-sm {% if filter_status == 'fixed' %}btn-primary{% endif %}">Fixed</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}" class="btn btn-sm {% if not filter_status %}btn-primary{% endif %}">Tous statuts</a>
     </div>
   </div>
 

@@ -82,10 +82,11 @@ def run_progress(
     session: Session = Depends(get_session),
 ) -> str:
     """Return progress HTML fragment, polled by htmx every 3s."""
+    import json
     from pathlib import Path
 
     from figma_audit.db.models import Run
-    from figma_audit.utils.progress import PHASE_LABELS, get_progress
+    from figma_audit.utils.progress import PHASE_LABELS
 
     run = session.exec(
         select(Run).where(Run.id == run_id, Run.project_id == project.id)
@@ -93,46 +94,52 @@ def run_progress(
     if not run:
         return "<div>Run not found</div>"
 
-    # Try to get live progress from the running pipeline
-    live = get_progress()
-    if live and run.status == "running":
-        data = live.to_dict()
-        from jinja2 import Environment, FileSystemLoader
+    tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
+    from jinja2 import Environment, FileSystemLoader
+    env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
+    tmpl = env.get_template("run_progress.html")
 
-        tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
-        env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
-        tmpl = env.get_template("run_progress.html")
+    # Read progress from DB
+    if run.progress_json and run.status == "running":
+        data = json.loads(run.progress_json)
         return tmpl.render(
             slug=slug,
             run_id=run_id,
-            phases=data["phases"],
-            current_step=data["current_step"],
-            current_progress=data["current_progress"],
-            current_total=data["current_total"],
-            elapsed=data["elapsed"],
+            phases=data.get("phases", []),
+            current_step=data.get("current_step", ""),
+            current_progress=data.get("current_progress", 0),
+            current_total=data.get("current_total", 0),
+            elapsed=data.get("elapsed"),
             polling=True,
         )
 
-    # Run is not active -- show final state without polling
-    phases = []
-    import json
+    # Run is not active -- show final state (or progress from last save)
+    if run.progress_json:
+        data = json.loads(run.progress_json)
+        return tmpl.render(
+            slug=slug,
+            run_id=run_id,
+            phases=data.get("phases", []),
+            current_step="",
+            current_progress=0,
+            current_total=0,
+            elapsed=data.get("elapsed"),
+            polling=False,
+        )
 
-    stats = json.loads(run.stats_json) if run.stats_json else {}
-    for name in ["analyze", "figma", "match", "capture", "compare", "report"]:
-        phases.append({
+    # No progress data at all -- show generic checklist
+    all_phases = ["analyze", "figma", "match", "capture", "compare", "report"]
+    phases = [
+        {
             "name": name,
             "label": PHASE_LABELS.get(name, name),
             "status": "completed" if run.status == "completed" else "pending",
             "duration": None,
             "detail": None,
             "cost": None,
-        })
-
-    from jinja2 import Environment, FileSystemLoader
-
-    tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
-    env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
-    tmpl = env.get_template("run_progress.html")
+        }
+        for name in all_phases
+    ]
     return tmpl.render(
         slug=slug,
         run_id=run_id,

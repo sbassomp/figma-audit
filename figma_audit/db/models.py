@@ -34,6 +34,7 @@ class Run(SQLModel, table=True):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     stats_json: str | None = None  # JSON serialized stats
+    progress_json: str | None = None  # JSON: live progress data for web UI
     error: str | None = None
     created_at: datetime = Field(default_factory=_now)
 
