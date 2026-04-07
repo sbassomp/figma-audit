@@ -18,6 +18,10 @@ router = APIRouter(tags=["web"])
 _templates_dir = Path(__file__).parent.parent.parent / "web" / "templates"
 templates = Jinja2Templates(directory=str(_templates_dir))
 
+# Inject build version into all templates
+from figma_audit import get_build_info
+templates.env.globals["build_version"] = get_build_info()
+
 
 def _nav_projects(session: Session) -> list[dict]:
     projects = session.exec(select(Project).order_by(Project.name)).all()

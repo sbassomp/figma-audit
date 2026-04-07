@@ -15,6 +15,11 @@ from figma_audit.api.routes import discrepancies, htmx, projects, runs, screens,
 from figma_audit.db.engine import init_db
 
 
+def _get_version() -> str:
+    from figma_audit import get_build_info
+    return get_build_info()
+
+
 def create_app(db_path: str = "figma-audit.db") -> FastAPI:
     """Create and configure the FastAPI application."""
     deps.set_db_path(db_path)
@@ -23,7 +28,7 @@ def create_app(db_path: str = "figma-audit.db") -> FastAPI:
     app = FastAPI(
         title="figma-audit",
         description="Semantic comparison between Figma designs and deployed web apps",
-        version="0.1.0",
+        version=_get_version(),
     )
 
     # API routes
@@ -60,6 +65,6 @@ def create_app(db_path: str = "figma-audit.db") -> FastAPI:
 
     @app.get("/api/health")
     def health() -> dict:
-        return {"status": "ok", "version": "0.1.0"}
+        return {"status": "ok", "version": _get_version()}
 
     return app

@@ -27,7 +27,7 @@ def _find_config(config_path: str | None) -> Path | None:
 
 
 @click.group()
-@click.version_option(package_name="figma-audit")
+@click.version_option(version=None, package_name="figma-audit", message="%(prog)s " + __import__("figma_audit").get_build_info())
 def cli() -> None:
     """figma-audit: Semantic comparison between Figma designs and deployed web apps."""
 
