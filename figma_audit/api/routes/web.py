@@ -224,7 +224,9 @@ def _process_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
                 return re.sub(r"-+", "-", s).strip("-")
 
             # Step 1: Extract ZIP
-            extract_dir = Path(shutil.mkdtemp())
+            import tempfile
+
+            extract_dir = Path(tempfile.mkdtemp())
             with zipfile.ZipFile(tmp_path) as zf:
                 zf.extractall(extract_dir)
             progress["steps"][0]["status"] = "done"
