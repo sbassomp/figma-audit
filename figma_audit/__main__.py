@@ -501,7 +501,7 @@ def setup() -> None:
     console.print(f"  FIGMA_TOKEN:       {'[green]configure[/green]' if figma_token else '[red]manquante[/red]'}")
 
     if not anthropic_key or click.confirm("  Modifier ANTHROPIC_API_KEY ?", default=not anthropic_key):
-        anthropic_key = click.prompt("  ANTHROPIC_API_KEY", default=anthropic_key, hide_input=True)
+        anthropic_key = click.prompt("  ANTHROPIC_API_KEY", default=anthropic_key)
 
     if not figma_token or click.confirm("  Modifier FIGMA_TOKEN ?", default=not figma_token):
         figma_token = click.prompt("  FIGMA_TOKEN", default=figma_token)
