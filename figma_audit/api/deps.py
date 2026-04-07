@@ -17,6 +17,10 @@ _db_path: str = "figma-audit.db"
 def set_db_path(path: str) -> None:
     global _db_path
     _db_path = path
+    # Also update the engine default so background tasks find the right DB
+    from figma_audit.db import engine as db_engine
+
+    db_engine.set_default_db_path(path)
 
 
 def get_session() -> Generator[Session, None, None]:
