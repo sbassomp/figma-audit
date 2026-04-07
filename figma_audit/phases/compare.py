@@ -290,11 +290,40 @@ def run(config: Config) -> Path:
     comparisons = []
     total_discrepancies = 0
 
+    # Get global progress for web UI updates
+    from figma_audit.utils.progress import get_progress
+
+    run_progress = get_progress()
+
     for i, pair in enumerate(unique_pairs):
         console.print(
             f"  [{i + 1}/{len(unique_pairs)}] {pair['figma_screen_name']} "
             f"vs {pair['page_id']} ({pair['route']})"
         )
+
+        # Update web UI progress
+        if run_progress:
+            run_progress.update(
+                step=f"{pair['figma_screen_name']} vs {pair['page_id']}",
+                progress=i + 1,
+                total=len(unique_pairs),
+            )
+            # Save to DB for htmx polling
+            import json as _json
+
+            from figma_audit.db.engine import get_engine
+            from figma_audit.db.models import Run
+
+            try:
+                engine = get_engine()
+                with Session(engine) as _s:
+                    _run = _s.exec(select(Run).where(Run.status == "running")).first()
+                    if _run:
+                        _run.progress_json = _json.dumps(run_progress.to_dict())
+                        _s.add(_run)
+                        _s.commit()
+            except Exception:
+                pass  # Non-blocking: progress update failure is OK
 
         figma_img_path = output_dir / pair["figma_image"]
         app_img_path = output_dir / pair["app_image"]

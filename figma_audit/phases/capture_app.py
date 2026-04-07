@@ -511,7 +511,17 @@ async def _run_async(config: Config) -> Path:
         all_results = []
         all_styles = {}
 
-        for page_info in pages_to_capture:
+        from figma_audit.utils.progress import get_progress
+
+        run_progress = get_progress()
+
+        for cap_idx, page_info in enumerate(pages_to_capture):
+            if run_progress:
+                run_progress.update(
+                    step=f"{page_info['id']} ({page_info['route']})",
+                    progress=cap_idx + 1,
+                    total=len(pages_to_capture),
+                )
             try:
                 result, styles = await _capture_route(
                     page, page_info, app_url, test_data, screenshots_dir

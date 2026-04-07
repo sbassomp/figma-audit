@@ -30,7 +30,7 @@
           {% endif %}
         </div>
         <div class="text-xs text-muted" style="width: 80px; text-align: right;">
-          {% if phase.duration %}{{ "%.1f" | format(phase.duration) }}s{% endif %}
+          {% if phase.duration %}{% if phase.duration >= 60 %}{{ (phase.duration // 60) | int }}m{{ "%02d" | format((phase.duration % 60) | int) }}s{% else %}{{ "%.1f" | format(phase.duration) }}s{% endif %}{% endif %}
         </div>
         <div class="text-xs" style="width: 140px; {% if phase.status == 'running' %}color: var(--accent);{% else %}color: var(--text-muted);{% endif %}">
           {{ phase.detail or '' }}
@@ -45,7 +45,9 @@
     {% if current_step %}
     <div class="text-xs mt-1" style="padding-left: 28px; color: var(--accent);">
       {{ current_step }}
-      {% if current_total > 0 %} ({{ current_progress }}/{{ current_total }}){% endif %}
+      {% if current_total > 0 %}
+        <span style="color: var(--text); font-weight: 600;"> {{ current_progress }}/{{ current_total }}</span>
+      {% endif %}
     </div>
     {% endif %}
 
@@ -58,22 +60,29 @@
 
     {% if polling %}
     <div class="text-xs text-muted mt-2" style="padding-left: 28px;">
-      Temps ecoule: <span id="elapsed-timer">{{ "%.0f" | format(elapsed or 0) }}</span>s
+      Temps ecoule: <span id="elapsed-timer"></span>
     </div>
     <script>
       (function() {
         var el = document.getElementById('elapsed-timer');
         if (!el) return;
-        var t = parseInt(el.textContent) || 0;
+        var t = {{ (elapsed or 0) | int }};
+        function fmt(s) {
+          if (s < 60) return s + 's';
+          var m = Math.floor(s / 60);
+          var sec = s % 60;
+          return m + 'm' + (sec < 10 ? '0' : '') + sec + 's';
+        }
+        el.textContent = fmt(t);
         var iv = setInterval(function() {
           t++;
-          if (el.parentNode) { el.textContent = t; } else { clearInterval(iv); }
+          if (el.parentNode) { el.textContent = fmt(t); } else { clearInterval(iv); }
         }, 1000);
       })();
     </script>
     {% elif elapsed %}
     <div class="text-xs text-muted mt-2" style="padding-left: 28px;">
-      Duree totale: {{ "%.0f" | format(elapsed) }}s
+      Duree totale: {% if elapsed >= 60 %}{{ (elapsed // 60) | int }}m{{ "%02d" | format((elapsed % 60) | int) }}s{% else %}{{ "%.0f" | format(elapsed) }}s{% endif %}
     </div>
     {% endif %}
   </div>

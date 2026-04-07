@@ -134,11 +134,21 @@ def run(config: Config) -> Path:
             for i in range(0, len(screens_with_images), VISION_BATCH_SIZE)
         ]
 
+        from figma_audit.utils.progress import get_progress
+
+        run_progress = get_progress()
+
         for batch_idx, batch in enumerate(batches):
             console.print(
                 f"[bold]Vision batch {batch_idx + 1}/{len(batches)} "
                 f"({len(batch)} screens)...[/bold]"
             )
+            if run_progress:
+                run_progress.update(
+                    step=f"Vision batch {batch_idx + 1}/{len(batches)}",
+                    progress=batch_idx + 1,
+                    total=len(batches),
+                )
 
             image_paths = []
             screen_list_text = "## Écrans Figma dans ce batch\n\n"
