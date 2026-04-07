@@ -53,7 +53,11 @@ def create_app(db_path: str = "figma-audit.db") -> FastAPI:
             project = session.exec(select(Project).where(Project.slug == slug)).first()
             if not project:
                 return Response(status_code=404)
-            file_path = Path(project.output_dir).expanduser().resolve() / path
+            output_dir = Path(project.output_dir).expanduser().resolve()
+            file_path = (output_dir / path).resolve()
+            # Prevent path traversal (../../etc/passwd)
+            if not str(file_path).startswith(str(output_dir)):
+                return Response(status_code=403)
             if not file_path.exists() or not file_path.is_file():
                 return Response(status_code=404)
             return FileResponse(file_path)

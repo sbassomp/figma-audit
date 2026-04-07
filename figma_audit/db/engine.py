@@ -7,14 +7,16 @@ from collections.abc import Generator
 from sqlmodel import Session, SQLModel, create_engine
 
 _engine = None
+_engine_path: str | None = None
 
 
 def get_engine(db_path: str = "figma-audit.db"):
     """Get or create the SQLite engine."""
-    global _engine
-    if _engine is None:
+    global _engine, _engine_path
+    if _engine is None or _engine_path != db_path:
         url = f"sqlite:///{db_path}"
         _engine = create_engine(url, echo=False)
+        _engine_path = db_path
     return _engine
 
 

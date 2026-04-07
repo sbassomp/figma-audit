@@ -196,7 +196,7 @@ def upload_screens(
                 )
                 converted += 1
             except Exception:
-                pass
+                pass  # PDF conversion failure is non-blocking (skip file)
 
         # Copy PNGs directly
         for png in extract_dir.glob("*.png"):

@@ -240,8 +240,8 @@ def import_screens(source: str, output: str | None, config_path: str | None) -> 
                 check=True,
             )
             converted += 1
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"  [dim]Convert failed {pdf.name}: {e}[/dim]")
 
     # Copy PNGs directly
     for png in png_files:
@@ -305,8 +305,8 @@ def import_screens(source: str, output: str | None, config_path: str | None) -> 
                 session.commit()
             if updated:
                 console.print(f"  DB synced: {updated} screen image paths updated")
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"  [dim]DB sync skipped: {e}[/dim]")
 
     if extract_dir:
         shutil.rmtree(extract_dir, ignore_errors=True)
@@ -570,8 +570,8 @@ def setup() -> None:
             console.print("  [green]Chromium installe[/green]\n")
         else:
             console.print("  [yellow]Chromium deja installe ou erreur (non bloquant)[/yellow]\n")
-    except Exception:
-        console.print("  [yellow]Impossible d'installer Chromium automatiquement[/yellow]\n")
+    except Exception as e:
+        console.print(f"  [yellow]Impossible d'installer Chromium: {e}[/yellow]\n")
 
     # ── Step 4: Daemon systemd ────────────────────────────────────
     console.print("[bold]4. Daemon (service systeme)[/bold]")
@@ -600,10 +600,12 @@ def _has_systemd() -> bool:
     import subprocess
 
     try:
-        result = subprocess.run(["systemctl", "--version"], capture_output=True, timeout=5)
+        result = subprocess.run(
+            ["systemctl", "--version"], capture_output=True, timeout=5
+        )
         return result.returncode == 0
     except Exception:
-        return False
+        return False  # systemd not available, not an error
 
 
 def _install_systemd_service(env_file: Path, db_path: Path) -> None:

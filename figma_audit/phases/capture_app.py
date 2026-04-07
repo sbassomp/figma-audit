@@ -31,11 +31,13 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
         selector = step.get("selector", "")
         try:
             await page.click(selector, timeout=timeout)
-        except Exception:
+        except Exception as e:
             # Fallback: try text-based selector
             text = step.get("text", "")
             if text:
                 await page.get_by_text(text).click(timeout=timeout)
+            else:
+                console.print(f"    [dim]Click failed on {selector}: {e}[/dim]")
 
     elif action == "fill":
         selector = step.get("selector", "")
@@ -46,8 +48,11 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
             value = _resolve_test_data(test_data, key)
         try:
             await page.fill(selector, value, timeout=timeout)
-        except Exception:
-            await page.locator(selector).fill(value, timeout=timeout)
+        except Exception as e:
+            try:
+                await page.locator(selector).fill(value, timeout=timeout)
+            except Exception:
+                console.print(f"    [dim]Fill failed on {selector}: {e}[/dim]")
 
     elif action == "wait":
         selector = step.get("selector")
@@ -202,13 +207,17 @@ def _cleanup_test_data(app_url: str, test_data: dict, course_ids: list[str]) -> 
 
         for cid in course_ids:
             try:
-                requests.post(f"{base}/exchange/courses/{cid}/archive", headers=headers, timeout=10)
-            except Exception:
-                pass
+                requests.post(
+                    f"{base}/exchange/courses/{cid}/archive",
+                    headers=headers,
+                    timeout=10,
+                )
+            except Exception as e:
+                console.print(f"  [dim]Cleanup course {cid} failed: {e}[/dim]")
 
         console.print(f"  [dim]Cleaned up {len(course_ids)} test course(s)[/dim]")
-    except Exception:
-        pass
+    except Exception as e:
+        console.print(f"  [dim]Cleanup skipped: {e}[/dim]")
 
 
 async def _flutter_login(page: Page, app_url: str, email: str, otp: str = "1234") -> bool:

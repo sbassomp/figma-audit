@@ -39,7 +39,7 @@ def get_build_info() -> str:
                     cache_file.write_text(build_num)
                     return f"{__version__}+{build_num}"
         except Exception:
-            pass
+            pass  # GitLab API unavailable, fall through to cache/git
 
     # 3. Cached value
     if cache_file.exists():
@@ -52,4 +52,4 @@ def get_build_info() -> str:
         ).strip()
         return f"{__version__}+{count}"
     except Exception:
-        return __version__
+        return __version__  # Not in a git repo

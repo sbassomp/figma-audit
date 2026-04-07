@@ -217,8 +217,8 @@ def run(config: Config) -> Path:
             if obsolete_screen_ids:
                 n_obs = len(obsolete_screen_ids)
                 console.print(f"  [dim]{n_obs} ecran(s) obsolete(s) exclus[/dim]")
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"  [dim]DB obsolete check skipped: {e}[/dim]")
 
     # Build comparison pairs from mapping
     pairs = []
