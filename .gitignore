@@ -2,14 +2,18 @@
 .venv/
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
 dist/
 build/
+*.egg
 
 # IDE
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
 
 # Output (generated data, not source)
 output/
@@ -18,12 +22,19 @@ output/
 .DS_Store
 Thumbs.db
 
-# Env
+# Env / secrets
 .env
+*.db
 
 # Tools config (not project code)
 tools.yaml
 
-# Debug screenshots
+# Debug
 debug-*.png
-*.db
+
+# Cache
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
