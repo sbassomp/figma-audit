@@ -23,15 +23,9 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
 
     if action == "navigate":
         url = step.get("url", "")
-        # Resolve ${test_data.key} templates in URLs (e.g. /courses/${test_data.course_id})
-        import re as _re
-
-        for match in _re.finditer(r"\$\{([^}]+)\}", url):
-            key = match.group(1)
-            if key.startswith("test_data."):
-                key = key[len("test_data."):]
-            val = _resolve_test_data(test_data, key)
-            url = url.replace(match.group(0), val)
+        # Resolve ${test_data.key} templates in URLs
+        if "${" in url:
+            url = _resolve_template(url, test_data)
         if url.startswith("/"):
             url = page.url.split("/")[0] + "//" + page.url.split("/")[2] + url
         await page.goto(url, wait_until="networkidle", timeout=timeout)
@@ -51,10 +45,9 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
     elif action == "fill":
         selector = step.get("selector", "")
         value = step.get("value", "")
-        # Resolve test_data references
-        if value.startswith("${") and value.endswith("}"):
-            key = value[2:-1]
-            value = _resolve_test_data(test_data, key)
+        # Resolve ${test_data.key} templates
+        if "${" in value:
+            value = _resolve_template(value, test_data)
         try:
             await page.fill(selector, value, timeout=timeout)
         except Exception as e:
@@ -78,193 +71,202 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
         pass  # Handled by the caller
 
 
-def _setup_test_data(app_url: str, test_data: dict, seed_account: dict | None = None) -> list[str]:
-    """Populate the app with test courses via API. Returns list of created course IDs.
+def _resolve_template(template: str, data: dict) -> str:
+    """Resolve ${key} templates in a string."""
+    import re as _re
 
-    Uses seed_account (a different user) so courses appear in "available" for the main user.
-    Falls back to main test_data credentials if no seed_account.
-    """
-    from datetime import datetime, timedelta, timezone
+    def _replace(m: _re.Match) -> str:
+        key = m.group(1)
+        if key.startswith("test_data."):
+            key = key[len("test_data."):]
+        return str(data.get(key, m.group(0)))
 
+    return _re.sub(r"\$\{([^}]+)\}", _replace, template)
+
+
+def _resolve_payload(payload: dict, data: dict) -> dict:
+    """Resolve ${key} templates in all string values of a payload dict."""
+    resolved = {}
+    for k, v in payload.items():
+        if isinstance(v, str) and "${" in v:
+            resolved[k] = _resolve_template(v, data)
+        elif isinstance(v, dict):
+            resolved[k] = _resolve_payload(v, data)
+        else:
+            resolved[k] = v
+    return resolved
+
+
+def _extract_path(obj: dict, dotted_path: str) -> str:
+    """Extract a value from a nested dict using a dotted path (e.g. 'data.id')."""
+    current = obj
+    for part in dotted_path.split("."):
+        if isinstance(current, dict):
+            current = current.get(part, "")
+        else:
+            return str(current)
+    return str(current)
+
+
+def _api_login(
+    base_url: str, test_setup: dict, credentials: dict
+) -> str | None:
+    """Authenticate via the app API using manifest config. Returns bearer token."""
     import requests
 
-    base = app_url.rstrip("/") + "/api"
-    email = (seed_account or {}).get("email") or test_data.get("email")
-    otp = (seed_account or {}).get("otp") or test_data.get("otp", "1234")
+    auth_endpoint = test_setup.get("auth_endpoint", "")
+    if not auth_endpoint:
+        return None
+
+    payload = _resolve_payload(test_setup.get("auth_payload", {}), credentials)
+
+    try:
+        otp_endpoint = test_setup.get("auth_otp_request_endpoint")
+        if otp_endpoint:
+            requests.post(
+                f"{base_url}{otp_endpoint}",
+                json={"email": credentials.get("email")},
+                timeout=10,
+            )
+        resp = requests.post(f"{base_url}{auth_endpoint}", json=payload, timeout=10)
+        if resp.status_code != 200:
+            console.print(
+                f"    [yellow]API login failed ({resp.status_code}): "
+                f"{resp.text[:100]}[/yellow]"
+            )
+            return None
+        token_path = test_setup.get("auth_token_path", "accessToken")
+        token = _extract_path(resp.json(), token_path)
+        if not token:
+            console.print(f"    [yellow]No token at '{token_path}'[/yellow]")
+            return None
+        return token
+    except Exception as e:
+        console.print(f"    [yellow]API login error: {e}[/yellow]")
+        return None
+
+
+def _setup_test_data(
+    app_url: str,
+    test_data: dict,
+    test_setup: dict,
+    seed_account: dict | None = None,
+) -> tuple[list[str], str | None]:
+    """Create test data via manifest-driven API calls.
+
+    Reads test_setup from the manifest to know which endpoints to call.
+    Returns (created_item_ids, taken_item_id).
+    """
+    import requests
+
+    base = app_url.rstrip("/")
+
+    if not test_setup or not test_setup.get("seed_items"):
+        return [], None
 
     console.print("  [bold]Setting up test data via API...[/bold]")
 
-    # Step 1: Get auth token
-    try:
-        requests.post(
-            f"{base}/public/auth/login/request-otp-email",
-            json={"email": email},
-            timeout=10,
-        )
-        resp = requests.post(
-            f"{base}/public/auth/login/verify-otp-email",
-            json={"email": email, "code": otp},
-            timeout=10,
-        )
-        if resp.status_code != 200:
-            console.print(
-                f"    [yellow]API login failed ({resp.status_code}): {resp.text[:100]}[/yellow]"
-            )
-            return []
-        body = resp.json()
-        token = body.get("accessToken") or body.get("access_token")
-        if not token:
-            console.print(f"    [yellow]No token in API response: {list(body.keys())}[/yellow]")
-            return []
-        console.print("    API login OK")
-    except Exception as e:
-        console.print(f"    [yellow]API login error: {e}[/yellow]")
-        return []
-
+    # Login with seed account (items created by seed appear as "available" for main user)
+    seed_creds = seed_account or test_data
+    token = _api_login(base, test_setup, seed_creds)
+    if not token:
+        return [], None
+    console.print("    API login OK (seed)")
     headers = {"Authorization": f"Bearer {token}"}
-    tomorrow = datetime.now(timezone.utc) + timedelta(days=1)
 
-    def _fmt_dt(hour: int, minute: int = 0) -> str:
-        return tomorrow.replace(hour=hour, minute=minute, second=0, microsecond=0).strftime(
-            "%Y-%m-%dT%H:%M:%S.000Z"
-        )
+    # Create seed items from manifest config
+    created_ids: list[str] = []
+    for i, item_spec in enumerate(test_setup["seed_items"]):
+        endpoint = _resolve_template(item_spec.get("endpoint", ""), test_data)
+        method = item_spec.get("method", "POST").upper()
+        payload = _resolve_payload(item_spec.get("payload", {}), test_data)
+        id_path = item_spec.get("id_path", "id")
+        td_key = item_spec.get("test_data_key", f"item_{i}")
 
-    courses = [
-        {
-            "departureLat": 43.2965,
-            "departureLng": 5.3698,
-            "departureAddress": "13012 St Julien Marseille",
-            "destinationLat": 43.2505,
-            "destinationLng": 5.4013,
-            "destinationAddress": "La Timone Marseille",
-            "destinationIsHealthcareFacility": True,
-            "desiredArrivalTime": _fmt_dt(10),
-            "waitingTimeMinutes": 15,
-            "courseType": "TYPE_1",
-            "visibility": "PUBLIC",
-            "roundTrip": True,
-            "patientReady": True,
-        },
-        {
-            "departureLat": 43.3004,
-            "departureLng": 5.3810,
-            "departureAddress": "13400 Napollon Aubagne",
-            "destinationLat": 43.2505,
-            "destinationLng": 5.4013,
-            "destinationAddress": "La Timone Marseille",
-            "destinationIsHealthcareFacility": True,
-            "desiredArrivalTime": _fmt_dt(14, 30),
-            "waitingTimeMinutes": 10,
-            "courseType": "TYPE_1",
-            "visibility": "PUBLIC",
-            "urgency": True,
-        },
-    ]
-
-    created_ids = []
-    for i, course_data in enumerate(courses):
         try:
-            resp = requests.post(
-                f"{base}/exchange/courses",
-                json=course_data,
-                headers=headers,
-                timeout=10,
+            resp = requests.request(
+                method, f"{base}{endpoint}", json=payload, headers=headers, timeout=10
             )
             if resp.status_code in (200, 201):
-                course_id = resp.json().get("id")
-                if course_id:
-                    created_ids.append(str(course_id))
-                console.print(f"    Course {i + 1} created")
+                item_id = _extract_path(resp.json(), id_path)
+                if item_id:
+                    created_ids.append(item_id)
+                    test_data[td_key] = item_id
+                console.print(f"    Item {i + 1} created ({td_key}={item_id})")
             else:
                 console.print(
-                    f"    [yellow]Course {i + 1} failed "
-                    f"({resp.status_code}): "
+                    f"    [yellow]Item {i + 1} failed ({resp.status_code}): "
                     f"{resp.text[:100]}[/yellow]"
                 )
         except Exception as e:
-            console.print(f"    [yellow]Course {i + 1} error: {e}[/yellow]")
+            console.print(f"    [yellow]Item {i + 1} error: {e}[/yellow]")
 
-    console.print(f"  [green]{len(created_ids)} test course(s) created (available)[/green]")
+    console.print(f"  [green]{len(created_ids)} test item(s) created[/green]")
 
-    # Take the first course with the MAIN user to get a "taken" state
-    main_email = test_data.get("email")
-    main_otp = test_data.get("otp", "1234")
-    taken_course_id = None
-    if created_ids and main_email and main_email != email:
-        try:
-            requests.post(
-                f"{base}/public/auth/login/request-otp-email",
-                json={"email": main_email},
-                timeout=10,
-            )
-            resp = requests.post(
-                f"{base}/public/auth/login/verify-otp-email",
-                json={"email": main_email, "code": main_otp},
-                timeout=10,
-            )
-            main_body = resp.json()
-            main_token = main_body.get("accessToken") or main_body.get("access_token")
+    # Take the first item with the MAIN user (if configured in manifest)
+    taken_id = None
+    take_spec = test_setup.get("take_item")
+    if take_spec and created_ids:
+        main_email = test_data.get("email")
+        seed_email = (seed_account or {}).get("email")
+        if main_email and main_email != seed_email:
+            main_token = _api_login(base, test_setup, test_data)
             if main_token:
-                main_headers = {"Authorization": f"Bearer {main_token}"}
-                # Take the first available course
                 cid = created_ids[0]
-                resp = requests.post(
-                    f"{base}/exchange/courses/{cid}/take",
-                    headers=main_headers,
-                    timeout=10,
-                )
-                if resp.status_code in (200, 201):
-                    taken_course_id = cid
-                    console.print(f"    Course {cid} taken by main user")
-                else:
-                    console.print(
-                        f"    [yellow]Take course failed ({resp.status_code})[/yellow]"
+                merged = {**test_data, "item_id": cid}
+                endpoint = _resolve_template(take_spec.get("endpoint", ""), merged)
+                td_key = take_spec.get("test_data_key", "item_taken_id")
+                try:
+                    resp = requests.request(
+                        take_spec.get("method", "POST"),
+                        f"{base}{endpoint}",
+                        headers={"Authorization": f"Bearer {main_token}"},
+                        timeout=10,
                     )
-        except Exception as e:
-            console.print(f"    [yellow]Take course error: {e}[/yellow]")
+                    if resp.status_code in (200, 201):
+                        taken_id = cid
+                        test_data[td_key] = cid
+                        console.print(f"    Item {cid} taken ({td_key})")
+                    else:
+                        console.print(
+                            f"    [yellow]Take failed ({resp.status_code})[/yellow]"
+                        )
+                except Exception as e:
+                    console.print(f"    [yellow]Take error: {e}[/yellow]")
 
-    return created_ids, taken_course_id
+    return created_ids, taken_id
 
 
-def _cleanup_test_data(app_url: str, test_data: dict, course_ids: list[str]) -> None:
-    """Archive test courses created during capture."""
-    if not course_ids:
+def _cleanup_test_data(
+    app_url: str,
+    test_data: dict,
+    test_setup: dict,
+    item_ids: list[str],
+) -> None:
+    """Clean up test items via manifest-configured API endpoint."""
+    if not item_ids or not test_setup:
         return
 
     import requests
 
-    base = app_url.rstrip("/") + "/api"
-    email = test_data.get("email")
-    otp = test_data.get("otp", "1234")
+    base = app_url.rstrip("/")
+    cleanup_endpoint = test_setup.get("cleanup_endpoint")
+    if not cleanup_endpoint:
+        return
 
-    try:
-        requests.post(
-            f"{base}/public/auth/login/request-otp-email",
-            json={"email": email},
-            timeout=10,
-        )
-        resp = requests.post(
-            f"{base}/public/auth/login/verify-otp-email",
-            json={"email": email, "code": otp},
-            timeout=10,
-        )
-        body = resp.json()
-        token = body.get("accessToken") or body.get("access_token")
-        headers = {"Authorization": f"Bearer {token}"}
+    token = _api_login(base, test_setup, test_data)
+    if not token:
+        return
+    headers = {"Authorization": f"Bearer {token}"}
 
-        for cid in course_ids:
-            try:
-                requests.post(
-                    f"{base}/exchange/courses/{cid}/archive",
-                    headers=headers,
-                    timeout=10,
-                )
-            except Exception as e:
-                console.print(f"  [dim]Cleanup course {cid} failed: {e}[/dim]")
+    for item_id in item_ids:
+        try:
+            endpoint = _resolve_template(cleanup_endpoint, {"item_id": item_id})
+            requests.post(f"{base}{endpoint}", headers=headers, timeout=10)
+        except Exception as e:
+            console.print(f"  [dim]Cleanup {item_id} failed: {e}[/dim]")
 
-        console.print(f"  [dim]Cleaned up {len(course_ids)} test course(s)[/dim]")
-    except Exception as e:
-        console.print(f"  [dim]Cleanup skipped: {e}[/dim]")
+    console.print(f"  [dim]Cleaned up {len(item_ids)} test item(s)[/dim]")
 
 
 async def _flutter_login(page: Page, app_url: str, email: str, otp: str = "1234") -> bool:
@@ -328,17 +330,6 @@ async def _flutter_login(page: Page, app_url: str, email: str, otp: str = "1234"
         console.print(f"    [yellow]Login error: {e}[/yellow]")
         return False
 
-
-def _resolve_test_data(test_data: dict, key: str) -> str:
-    """Resolve a dotted key path in test_data (e.g. 'addresses.pickup')."""
-    parts = key.split(".")
-    current = test_data
-    for part in parts:
-        if isinstance(current, dict):
-            current = current.get(part, "")
-        else:
-            return str(current)
-    return str(current)
 
 
 def _slugify(text: str) -> str:
@@ -554,25 +545,17 @@ async def _run_async(config: Config) -> Path:
         test_data["email"] = config.test_credentials.email
         test_data["otp"] = config.test_credentials.otp
 
-    # Populate app with test data via API (if credentials available)
-    created_course_ids = []
-    taken_course_id = None
+    # Populate app with test data via manifest-driven API calls
+    test_setup = pages_manifest.get("test_setup", {})
+    created_item_ids: list[str] = []
+    taken_item_id: str | None = None
     seed_account = config.seed_account.model_dump() if config.seed_account.email else None
-    if (seed_account or test_data.get("email")) and app_url:
-        created_course_ids, taken_course_id = _setup_test_data(
-            app_url, test_data, seed_account=seed_account
+    if test_setup.get("seed_items") and (seed_account or test_data.get("email")) and app_url:
+        created_item_ids, taken_item_id = _setup_test_data(
+            app_url, test_data, test_setup, seed_account=seed_account
         )
-
-    # Inject course IDs into test_data for navigation_steps templates
-    # Available: course_ids[1:] (first one was taken), Taken: taken_course_id
-    if created_course_ids:
-        test_data["course_ids"] = created_course_ids
-        # First available course (not taken)
-        available = [cid for cid in created_course_ids if cid != taken_course_id]
-        test_data["course_id"] = available[0] if available else created_course_ids[0]
-        test_data["course_available_id"] = test_data["course_id"]
-    if taken_course_id:
-        test_data["course_taken_id"] = taken_course_id
+    # Note: _setup_test_data injects IDs directly into test_data
+    # using the test_data_key from each seed_item spec in the manifest
 
     # Launch browser
     async with async_playwright() as pw:
@@ -672,9 +655,9 @@ async def _run_async(config: Config) -> Path:
         await browser.close()
 
     # Cleanup test data
-    if created_course_ids:
-        cleanup_data = seed_account if seed_account else test_data
-        _cleanup_test_data(app_url, cleanup_data, created_course_ids)
+    if created_item_ids:
+        cleanup_creds = seed_account if seed_account else test_data
+        _cleanup_test_data(app_url, cleanup_creds, test_setup, created_item_ids)
 
     # Save results
     captures_path = output_dir / "app_captures.json"
