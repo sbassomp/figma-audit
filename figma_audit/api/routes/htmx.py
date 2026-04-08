@@ -183,6 +183,12 @@ def run_progress(
     # Read progress from DB
     if run.progress_json and run.status == "running":
         data = json.loads(run.progress_json)
+        # Compute elapsed from run.started_at (live) instead of frozen progress_json value
+        elapsed = data.get("elapsed", 0)
+        if run.started_at:
+            from datetime import datetime, timezone
+
+            elapsed = (datetime.now(timezone.utc) - run.started_at).total_seconds()
         return tmpl.render(
             slug=slug,
             run_id=run_id,
@@ -190,7 +196,7 @@ def run_progress(
             current_step=data.get("current_step", ""),
             current_progress=data.get("current_progress", 0),
             current_total=data.get("current_total", 0),
-            elapsed=data.get("elapsed"),
+            elapsed=elapsed,
             run_error=None,
             polling=True,
         )
