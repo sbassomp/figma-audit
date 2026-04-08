@@ -493,17 +493,72 @@ async def _run_async(config: Config) -> Path:
         )
         page = await context.new_page()
 
-        # Initial navigation and authentication
-        console.print(f"  Loading {app_url}...")
-        try:
-            await page.goto(app_url, wait_until="networkidle", timeout=30000)
-        except Exception as e:
-            console.print(f"  [yellow]Initial load: {e}[/yellow]")
+        # Split pages: capture public pages BEFORE login, auth-required pages AFTER.
+        # This ensures splash/welcome screens are captured in the logged-out state,
+        # before the app redirects authenticated users away from them.
+        public_pages = [p for p in pages_to_capture if not p.get("auth_required")]
+        auth_pages = [p for p in pages_to_capture if p.get("auth_required")]
 
-        # Authenticate if test credentials are available
+        all_results = []
+        all_styles = {}
+
+        from figma_audit.utils.progress import get_progress
+
+        run_progress = get_progress()
+        total_pages = len(pages_to_capture)
+        cap_idx = 0
+
+        async def _capture_batch(batch: list[dict]) -> None:
+            nonlocal cap_idx
+            for page_info in batch:
+                if run_progress:
+                    run_progress.update(
+                        step=f"{page_info['id']} ({page_info['route']})",
+                        progress=cap_idx + 1,
+                        total=total_pages,
+                    )
+                try:
+                    result, styles = await _capture_route(
+                        page, page_info, app_url, test_data, screenshots_dir
+                    )
+                    all_results.append(result)
+                    if styles:
+                        all_styles[page_info["id"]] = styles
+                except Exception as e:
+                    console.print(f"  [red]Error capturing {page_info['id']}: {e}[/red]")
+                    all_results.append(
+                        {
+                            "page_id": page_info["id"],
+                            "route": page_info["route"],
+                            "screenshot": None,
+                            "error": str(e),
+                        }
+                    )
+                cap_idx += 1
+
+        # ── Phase A: Capture public pages (before login) ─────────────
+        if public_pages:
+            console.print(
+                f"\n  [bold]Capturing {len(public_pages)} public page(s) (before login)...[/bold]"
+            )
+            console.print(f"  Loading {app_url}...")
+            try:
+                await page.goto(app_url, wait_until="networkidle", timeout=30000)
+            except Exception as e:
+                console.print(f"  [yellow]Initial load: {e}[/yellow]")
+
+            await _capture_batch(public_pages)
+
+        # ── Phase B: Authenticate ─────────────────────────────────────
         auth_email = test_data.get("email") or test_data.get("phone")
         auth_otp = test_data.get("otp", "1234")
         if auth_email:
+            # Reload app to start fresh for login (public captures may have navigated away)
+            try:
+                await page.goto(app_url, wait_until="networkidle", timeout=30000)
+            except Exception as e:
+                console.print(f"  [yellow]Pre-login load: {e}[/yellow]")
+
             logged_in = await _flutter_login(page, app_url, auth_email, auth_otp)
             if logged_in:
                 console.print("  [green]Authentication successful[/green]")
@@ -512,38 +567,12 @@ async def _run_async(config: Config) -> Path:
                     "  [yellow]Authentication failed -- continuing without login[/yellow]"
                 )
 
-        # Capture each page
-        all_results = []
-        all_styles = {}
-
-        from figma_audit.utils.progress import get_progress
-
-        run_progress = get_progress()
-
-        for cap_idx, page_info in enumerate(pages_to_capture):
-            if run_progress:
-                run_progress.update(
-                    step=f"{page_info['id']} ({page_info['route']})",
-                    progress=cap_idx + 1,
-                    total=len(pages_to_capture),
-                )
-            try:
-                result, styles = await _capture_route(
-                    page, page_info, app_url, test_data, screenshots_dir
-                )
-                all_results.append(result)
-                if styles:
-                    all_styles[page_info["id"]] = styles
-            except Exception as e:
-                console.print(f"  [red]Error capturing {page_info['id']}: {e}[/red]")
-                all_results.append(
-                    {
-                        "page_id": page_info["id"],
-                        "route": page_info["route"],
-                        "screenshot": None,
-                        "error": str(e),
-                    }
-                )
+        # ── Phase C: Capture auth-required pages (after login) ────────
+        if auth_pages:
+            console.print(
+                f"\n  [bold]Capturing {len(auth_pages)} authenticated page(s)...[/bold]"
+            )
+            await _capture_batch(auth_pages)
 
         await browser.close()
 

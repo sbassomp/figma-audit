@@ -218,6 +218,21 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
                 )
             ).first()
             if not existing:
+                # Inherit image_path from an existing screen with the same name
+                # (handles re-imports where figma_node_id changed but the screen
+                # is the same and already has an image from import-screens)
+                image_path = s.get("image_path")
+                if not image_path:
+                    sibling = session.exec(
+                        select(Screen).where(
+                            Screen.project_id == project.id,
+                            Screen.name == s["name"],
+                            Screen.image_path.is_not(None),  # type: ignore[union-attr]
+                        )
+                    ).first()
+                    if sibling:
+                        image_path = sibling.image_path
+
                 screen = Screen(
                     project_id=project.id,
                     figma_node_id=s["id"],
@@ -225,7 +240,7 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
                     page=s.get("page", ""),
                     width=s.get("width", 0),
                     height=s.get("height", 0),
-                    image_path=s.get("image_path"),
+                    image_path=image_path,
                     metadata_json=json.dumps(
                         {
                             "background_color": s.get("background_color"),
