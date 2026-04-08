@@ -49,6 +49,16 @@
   </div>
 </div>
 
+{% if fidelity != 'mismatch' and discrepancies %}
+<div style="margin-bottom: 1rem;">
+  <button class="btn"
+    hx-get="/htmx/projects/{{ project.slug }}/runs/{{ run_id }}/fix-prompt/{{ capture.page_id }}{% if screen.id %}?screen_id={{ screen.id }}{% endif %}"
+    hx-target="#fix-prompt-area"
+    hx-swap="innerHTML">Generer prompt correctif</button>
+  <div id="fix-prompt-area"></div>
+</div>
+{% endif %}
+
 <div class="card">
   <h3>Ecarts ({{ discrepancies | length }})</h3>
 

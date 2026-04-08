@@ -184,8 +184,46 @@ def _setup_test_data(app_url: str, test_data: dict, seed_account: dict | None = 
         except Exception as e:
             console.print(f"    [yellow]Course {i + 1} error: {e}[/yellow]")
 
-    console.print(f"  [green]{len(created_ids)} test course(s) created[/green]")
-    return created_ids
+    console.print(f"  [green]{len(created_ids)} test course(s) created (available)[/green]")
+
+    # Take the first course with the MAIN user to get a "taken" state
+    main_email = test_data.get("email")
+    main_otp = test_data.get("otp", "1234")
+    taken_course_id = None
+    if created_ids and main_email and main_email != email:
+        try:
+            requests.post(
+                f"{base}/public/auth/login/request-otp-email",
+                json={"email": main_email},
+                timeout=10,
+            )
+            resp = requests.post(
+                f"{base}/public/auth/login/verify-otp-email",
+                json={"email": main_email, "code": main_otp},
+                timeout=10,
+            )
+            main_body = resp.json()
+            main_token = main_body.get("accessToken") or main_body.get("access_token")
+            if main_token:
+                main_headers = {"Authorization": f"Bearer {main_token}"}
+                # Take the first available course
+                cid = created_ids[0]
+                resp = requests.post(
+                    f"{base}/exchange/courses/{cid}/take",
+                    headers=main_headers,
+                    timeout=10,
+                )
+                if resp.status_code in (200, 201):
+                    taken_course_id = cid
+                    console.print(f"    Course {cid} taken by main user")
+                else:
+                    console.print(
+                        f"    [yellow]Take course failed ({resp.status_code})[/yellow]"
+                    )
+        except Exception as e:
+            console.print(f"    [yellow]Take course error: {e}[/yellow]")
+
+    return created_ids, taken_course_id
 
 
 def _cleanup_test_data(app_url: str, test_data: dict, course_ids: list[str]) -> None:
@@ -518,14 +556,23 @@ async def _run_async(config: Config) -> Path:
 
     # Populate app with test data via API (if credentials available)
     created_course_ids = []
+    taken_course_id = None
     seed_account = config.seed_account.model_dump() if config.seed_account.email else None
     if (seed_account or test_data.get("email")) and app_url:
-        created_course_ids = _setup_test_data(app_url, test_data, seed_account=seed_account)
+        created_course_ids, taken_course_id = _setup_test_data(
+            app_url, test_data, seed_account=seed_account
+        )
 
-    # Inject created course IDs into test_data for navigation_steps templates
+    # Inject course IDs into test_data for navigation_steps templates
+    # Available: course_ids[1:] (first one was taken), Taken: taken_course_id
     if created_course_ids:
-        test_data["course_id"] = created_course_ids[0]
         test_data["course_ids"] = created_course_ids
+        # First available course (not taken)
+        available = [cid for cid in created_course_ids if cid != taken_course_id]
+        test_data["course_id"] = available[0] if available else created_course_ids[0]
+        test_data["course_available_id"] = test_data["course_id"]
+    if taken_course_id:
+        test_data["course_taken_id"] = taken_course_id
 
     # Launch browser
     async with async_playwright() as pw:

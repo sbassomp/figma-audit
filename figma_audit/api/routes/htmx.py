@@ -293,3 +293,85 @@ def update_screen_status(
     session.commit()
     session.refresh(screen)
     return _screen_card_html(screen, slug)
+
+
+@router.get("/runs/{run_id}/fix-prompt/{page_id}", response_class=HTMLResponse)
+def generate_fix_prompt(
+    slug: str,
+    run_id: int,
+    page_id: str,
+    screen_id: int | None = None,
+    project: Project = Depends(get_project),
+    session: Session = Depends(get_session),
+) -> str:
+    """Generate a developer-friendly prompt listing what to fix for a page."""
+    query = select(Discrepancy).where(
+        Discrepancy.run_id == run_id,
+        Discrepancy.page_id == page_id,
+        Discrepancy.status.not_in(["ignored", "wontfix"]),  # type: ignore[union-attr]
+    )
+    if screen_id:
+        query = query.where(Discrepancy.screen_id == screen_id)
+    discs = session.exec(query.order_by(Discrepancy.severity)).all()
+
+    if not discs:
+        return (
+            '<div class="card" style="margin-top:1rem;">'
+            "<p>Aucun ecart actif a corriger.</p></div>"
+        )
+
+    # Get screen info
+    screen = session.get(Screen, screen_id) if screen_id else None
+    screen_name = screen.name if screen else page_id
+
+    # Build prompt
+    lines = [
+        f"Corrige les ecarts suivants sur la page **{page_id}**",
+        f"(ecran Figma de reference : **{screen_name}**).",
+        "",
+    ]
+
+    by_severity = {"critical": [], "important": [], "minor": []}
+    for d in discs:
+        by_severity.get(d.severity, by_severity["minor"]).append(d)
+
+    for sev in ("critical", "important", "minor"):
+        items = by_severity[sev]
+        if not items:
+            continue
+        lines.append(f"### {sev.upper()} ({len(items)})")
+        lines.append("")
+        for d in items:
+            loc = f" ({d.location})" if d.location else ""
+            lines.append(f"- **{d.category}{loc}** : {d.description}")
+            if d.figma_value:
+                lines.append(f"  - Figma : `{d.figma_value}`")
+            if d.app_value:
+                lines.append(f"  - App : `{d.app_value}`")
+        lines.append("")
+
+    prompt_text = "\n".join(lines)
+
+    # Render as copyable block
+    from markupsafe import escape
+
+    escaped = escape(prompt_text)
+    copy_js = (
+        "navigator.clipboard.writeText("
+        "document.getElementById('fix-prompt-text').textContent"
+        ").then(()=>this.textContent='Copie !')"
+    )
+    pre_style = (
+        "white-space:pre-wrap;font-size:0.8rem;"
+        "background:var(--surface2);padding:1rem;"
+        "border-radius:8px;max-height:400px;overflow-y:auto;"
+    )
+    return (
+        '<div class="card" style="margin-top:1rem;">'
+        '<div class="flex justify-between items-center mb-1">'
+        "<h3>Prompt correctif</h3>"
+        f'<button class="btn btn-sm" onclick="{copy_js}">Copier</button>'
+        "</div>"
+        f'<pre id="fix-prompt-text" style="{pre_style}">{escaped}</pre>'
+        "</div>"
+    )

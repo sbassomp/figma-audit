@@ -183,7 +183,11 @@ Rules:
 each page from the app root. \
 For pages that require dynamic IDs (e.g. /courses/:id), use ${test_data.key} templates \
 in URLs (e.g. {"action": "navigate", "url": "/courses/${test_data.course_id}"}). \
-Available test_data keys will include any IDs created during test setup.
+Available test_data keys include: course_id (first available), \
+course_available_id, course_taken_id (taken by main user), course_ids (all). \
+For capturable_states that depend on data state (e.g. course detail "available" vs "taken"), \
+use different test_data keys in the delta_steps navigation URL \
+(e.g. state "taken" navigates to /courses/${test_data.course_taken_id}).
 - For form_fields: list all user-input fields visible on the page.
 - For interactive_states: list distinct visual states \
 (loading, empty, populated, error, wizard steps).
