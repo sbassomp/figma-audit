@@ -70,12 +70,12 @@ Concentre-toi uniquement sur :
 - Les ETATS VISUELS (badge actif/inactif, couleur d'un label selon le contexte)
 
 Exemples de choses a NE PAS signaler :
-- Prix different (170€ vs 79€) → donnee dynamique
-- Adresse differente → donnee dynamique
+- Prix/montant different (170€ vs 79€) → donnee dynamique
+- Adresse/lieu different → donnee dynamique
 - Date/heure differente → donnee dynamique
-- Nom de patient different → donnee dynamique
-- Distance/duree differente → donnee dynamique
-- Numero de version de l'app → ignore
+- Nom de personne different → donnee dynamique
+- Distance/duree/quantite differente → donnee dynamique
+- Numero de version, identifiants → ignore
 
 Exemples de choses a SIGNALER :
 - Couleur de fond d'un badge differente (bleu vs vert)

@@ -181,13 +181,13 @@ Rules:
 - Temperature 0: be precise and factual, only include what the code explicitly shows.
 - For navigation_steps: describe the Playwright actions needed to reach \
 each page from the app root. \
-For pages that require dynamic IDs (e.g. /courses/:id), use ${test_data.key} templates \
-in URLs (e.g. {"action": "navigate", "url": "/courses/${test_data.course_id}"}). \
-Available test_data keys include: course_id (first available), \
-course_available_id, course_taken_id (taken by main user), course_ids (all). \
-For capturable_states that depend on data state (e.g. course detail "available" vs "taken"), \
-use different test_data keys in the delta_steps navigation URL \
-(e.g. state "taken" navigates to /courses/${test_data.course_taken_id}).
+For pages that require dynamic IDs (e.g. /items/:id), use ${test_data.key} templates \
+in URLs (e.g. {"action": "navigate", "url": "/items/${test_data.item_id}"}). \
+The test_data object will contain IDs created during test setup. \
+Use descriptive key names matching the domain model \
+(e.g. item_id, order_id, user_id, product_available_id, product_sold_id). \
+For capturable_states that depend on data state (e.g. detail page "available" vs "sold"), \
+use different test_data keys in the delta_steps navigation URL for each state.
 - For form_fields: list all user-input fields visible on the page.
 - For interactive_states: list distinct visual states \
 (loading, empty, populated, error, wizard steps).
@@ -255,9 +255,28 @@ JSON Schema to follow:
   "test_data": {
     "phone": "+33612345678",
     "otp": "1234",
-    "email": "test@example.com",
-    "addresses": {"pickup": "...", "destination": "..."},
-    "patient_name": "Jean Dupont"
+    "email": "test@example.com"
+  },
+  "test_setup": {
+    "description": "API calls to create test data before capture. Optional.",
+    "auth_endpoint": "/api/public/auth/login",
+    "auth_payload": {"email": "${test_data.email}", "code": "${test_data.otp}"},
+    "auth_token_path": "accessToken",
+    "seed_items": [
+      {
+        "endpoint": "/api/items",
+        "method": "POST",
+        "payload": {"name": "Test item", "status": "available"},
+        "id_path": "id",
+        "test_data_key": "item_id"
+      }
+    ],
+    "take_item": {
+      "endpoint": "/api/items/${item_id}/take",
+      "method": "POST",
+      "test_data_key": "item_taken_id"
+    },
+    "cleanup_endpoint": "/api/items/${item_id}/archive"
   }
 }
 """

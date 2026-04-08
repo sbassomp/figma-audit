@@ -39,7 +39,7 @@ il correspond a une route authentifiee, pas au splash.
 
 IMPORTANT - Ecrans a plusieurs etats:
 - Un meme ecran Figma peut correspondre a un ETAT SPECIFIQUE d'une page \
-(ex: "Courses Dark Mode" = etat dark de la page courses).
+(ex: un ecran avec un theme sombre = variante visuelle de la meme page).
 - Si une page a des "etats capturables" (capturable_states), identifie a quel \
 etat specifique correspond chaque ecran Figma et renseigne le champ state_id \
 avec l'identifiant exact (ex: "step_2_addresses"). \
