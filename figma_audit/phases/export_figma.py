@@ -18,23 +18,49 @@ console = Console()
 
 # Prefixes/patterns to skip when identifying screens
 SKIP_NAME_PATTERNS = re.compile(
-    r"^(_|Component/|Icon/|icon|Connector|Phosphor|Whatsapp)",
+    r"^("
+    r"_|"
+    r"Component/|Icon/|"
+    r"icon|ico-|"
+    r"bg-|"
+    r"Connector|"
+    r"Phosphor|"
+    r"Whatsapp|"
+    r"Vector|"
+    r"flutter-view|"
+    r"Ellipse|"
+    r"Rectangle|"
+    r"Line|"
+    r"Image|"
+    r"Group"
+    r")",
     re.IGNORECASE,
 )
-SKIP_TYPES = {"CONNECTOR", "STICKY", "TEXT", "RECTANGLE", "GROUP"}
+
+# Only FRAME (and SECTION as container) are valid screen types.
+# Everything else (COMPONENT, COMPONENT_SET, INSTANCE, CONNECTOR, etc.)
+# is a design-system element, not a screen.
+SCREEN_TYPES = {"FRAME", "SECTION"}
 
 # Reasonable mobile screen dimensions
 MIN_SCREEN_WIDTH = 300
 MIN_SCREEN_HEIGHT = 500
+MAX_SCREEN_WIDTH = 1920  # Skip overly wide desktop frames / layout grids
 
 
 def _slugify(name: str) -> str:
     """Convert a Figma screen name to a filesystem-safe slug."""
     s = name.lower().strip()
+    # Replace / with - before stripping other special chars
+    s = s.replace("/", "-")
     s = re.sub(r"[^\w\s-]", "", s)
     s = re.sub(r"[\s_]+", "-", s)
     s = re.sub(r"-+", "-", s)
-    return s.strip("-")
+    s = s.strip("-")
+    # Truncate overly long slugs (keep max 80 chars)
+    if len(s) > 80:
+        s = s[:80].rstrip("-")
+    return s
 
 
 def _is_screen_candidate(node: dict) -> bool:
@@ -42,13 +68,11 @@ def _is_screen_candidate(node: dict) -> bool:
     node_type = node.get("type", "")
     name = node.get("name", "")
 
-    if node_type in SKIP_TYPES:
-        return False
-    if SKIP_NAME_PATTERNS.match(name):
+    # Only accept FRAME / SECTION types — reject components, instances, etc.
+    if node_type not in SCREEN_TYPES:
         return False
 
-    # COMPONENT_SET and standalone COMPONENT are typically design system elements
-    if node_type == "COMPONENT_SET":
+    if SKIP_NAME_PATTERNS.match(name):
         return False
 
     # Check dimensions if available
@@ -57,6 +81,8 @@ def _is_screen_candidate(node: dict) -> bool:
     h = bbox.get("height", 0)
     if w > 0 and h > 0:
         if w < MIN_SCREEN_WIDTH or h < MIN_SCREEN_HEIGHT:
+            return False
+        if w > MAX_SCREEN_WIDTH:
             return False
 
     return True
@@ -244,7 +270,7 @@ def run(
     """
     file_key = config.figma_file_key
     if not file_key:
-        raise ValueError("No Figma file key found. Provide --figma-url.")
+        raise ValueError("No Figma file key found. Provide --figma-url or --figma-file.")
 
     cache_dir = config.figma_cache_dir
     screens_dir = config.figma_screens_dir
@@ -256,7 +282,17 @@ def run(
     manifest_path = config.output_dir / "figma_manifest.json"
 
     # ── Step 1: Get file tree ──────────────────────────────────────
-    if offline:
+    from_fig_file = bool(config.figma_file)
+
+    if from_fig_file:
+        fig_path = config.figma_file_path
+        console.print(f"[bold]Parsing local .fig file: {fig_path}[/bold]")
+        from figma_audit.utils.fig_parser import parse_fig_file
+
+        file_data = parse_fig_file(fig_path)
+        save_cache(file_data, file_json_path)
+        console.print(f"[green]Parsed file tree saved to {file_json_path}[/green]")
+    elif offline:
         console.print("[bold]Mode offline — utilisation du cache local.[/bold]")
         if not file_json_path.exists():
             raise FileNotFoundError(
@@ -300,7 +336,8 @@ def run(
         console.print(f"  {s['id']:15s} {dim:>12s}  {s['name']}")
 
     # ── Step 3: Download screen PNGs ───────────────────────────────
-    if not offline:
+    # Skip when using .fig file (no rendering API — user imports PNGs via import-screens)
+    if not offline and not from_fig_file:
         client.download_screens(
             file_key,
             screens,

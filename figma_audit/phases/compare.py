@@ -13,6 +13,9 @@ from figma_audit.utils.claude_client import ClaudeClient
 
 console = Console()
 
+# Exposed after run() for cost tracking by callers
+_last_client: ClaudeClient | None = None
+
 VISION_SYSTEM_PROMPT = """\
 You are a senior UI/UX auditor comparing a Figma design (reference) against its real implementation.
 
@@ -20,7 +23,27 @@ You will receive two images:
 1. First image: the Figma design (the source of truth)
 2. Second image: the actual deployed application screenshot
 
-You may also receive extracted design tokens and programmatic comparison results.
+You will also receive context about the page: description, auth state, form fields, \
+visual states, and structural text/font info from the Figma design.
+
+CRITICAL - Verification du matching:
+AVANT de comparer les details, verifie que les deux images montrent le MEME TYPE de page. \
+Par exemple un splash/onboarding vs une liste/dashboard, ou un formulaire vs une page de profil.
+Si les deux images montrent des ecrans fondamentalement differents (pas le meme type de page), \
+les ecrans ont ete mal associes. Dans ce cas:
+- Met overall_fidelity a "mismatch"
+- Ajoute UN SEUL discrepancy:
+  category: "MATCHING_ERROR"
+  description: "Les deux ecrans ne correspondent pas — [explication de ce que chaque image montre]"
+  severity: "critical"
+- Ne genere PAS d'autres discrepancies (elles seraient toutes fausses)
+- Le summary doit expliquer que le matching est incorrect
+
+Si les deux images montrent bien le meme type de page, procede a la comparaison normale ci-dessous.
+
+IMPORTANT for COLORS: Base your color comparison ONLY on the two images you see.
+Do NOT rely on any hex color values mentioned in the text context — they may come from a
+different variant of the design and be inaccurate. Compare what you SEE in the images.
 
 Compare element by element on these criteria:
 1. LAYOUT: general arrangement, alignment, structure, visual hierarchy
@@ -81,22 +104,65 @@ Output ONLY valid JSON with this schema:
 
 def _build_comparison_context(
     figma_screen: dict,
-    figma_manifest: dict,
     app_styles: dict | None,
     page_id: str,
     page_info: dict | None = None,
 ) -> str:
-    """Build text context for the vision comparison."""
+    """Build text context for the vision comparison.
+
+    NOTE: We intentionally omit extracted Figma color values from the context.
+    These colors are parsed from the Figma JSON tree and can come from a different
+    variant of the screen (e.g. light-mode colors for a dark-mode screen), leading
+    to false-positive "critical" color discrepancies. The AI should compare colors
+    based solely on the two images it receives.
+    """
     parts = []
 
     # Figma screen info
     parts.append(f"## Ecran Figma: {figma_screen.get('name', '?')}")
     parts.append(f"Dimensions: {figma_screen.get('width', '?')}x{figma_screen.get('height', '?')}")
-    bg = figma_screen.get("background_color")
-    if bg:
-        parts.append(f"Background: {bg}")
 
-    # Design tokens from Figma elements
+    # Page context from manifest (description, auth, form fields, etc.)
+    if page_info:
+        parts.append(f"\n## Page de l'application: {page_id} ({page_info.get('route', '?')})")
+        desc = page_info.get("description", "")
+        if desc:
+            parts.append(f"Description: {desc}")
+
+        auth = page_info.get("auth_required", False)
+        if auth:
+            parts.append("Auth requise: Oui (page visible apres connexion)")
+        else:
+            parts.append("Auth requise: Non (page publique, visible avant login)")
+
+        req_state = page_info.get("required_state", {})
+        if req_state:
+            state_desc = req_state.get("description", "")
+            if state_desc:
+                parts.append(f"Prerequis: {state_desc}")
+            deps = req_state.get("data_dependencies", [])
+            if deps:
+                parts.append(f"Donnees requises: {', '.join(deps)}")
+
+        fields = page_info.get("form_fields", [])
+        if fields:
+            field_descs = [f"{f['name']} ({f.get('type', '?')})" for f in fields]
+            parts.append(f"Champs de formulaire attendus: {', '.join(field_descs)}")
+
+        states = page_info.get("interactive_states", [])
+        if states:
+            parts.append(f"Etats visuels possibles: {', '.join(states)}")
+            if "empty" in states and "populated" in states:
+                parts.append(
+                    "ATTENTION: cette page a un etat 'empty' "
+                    "et un etat 'populated'. "
+                    "Si l'app affiche un etat vide, comparer "
+                    "la structure/layout de l'etat vide, "
+                    "pas le contenu dynamique manquant "
+                    "(categorie DONNEES_ABSENTES, severity minor)."
+                )
+
+    # Text elements — content and font info only, NO color values
     elements = figma_screen.get("elements", [])
     if elements:
         texts = [e for e in elements if e.get("type") == "TEXT"]
@@ -109,32 +175,7 @@ def _build_comparison_context(
                     f"{t.get('font_size', '?')}px "
                     f"w{t.get('font_weight', '?')}"
                 )
-                color = t.get("color", "?")
-                parts.append(f'  - "{content}" -- {font} -- {color}')
-
-        colors_used = set()
-        for e in elements:
-            if e.get("color"):
-                colors_used.add(e["color"])
-            if e.get("fill"):
-                colors_used.add(e["fill"])
-        if colors_used:
-            parts.append(f"\n### Couleurs utilisees: {', '.join(sorted(colors_used))}")
-
-    # Page interactive states context
-    if page_info:
-        states = page_info.get("interactive_states", [])
-        if states:
-            parts.append(f"\n### Etats interactifs possibles: {', '.join(states)}")
-            if "empty" in states and "populated" in states:
-                parts.append(
-                    "ATTENTION: cette page a un etat 'empty' "
-                    "et un etat 'populated'. "
-                    "Si l'app affiche un etat vide, comparer "
-                    "la structure/layout de l'etat vide, "
-                    "pas le contenu dynamique manquant "
-                    "(categorie DONNEES_ABSENTES, severity minor)."
-                )
+                parts.append(f'  - "{content}" -- {font}')
 
     # App computed styles (if available)
     if app_styles and page_id in app_styles:
@@ -286,6 +327,7 @@ def run(config: Config) -> Path:
         f"(estimation: ~{est_input + est_output:,} tokens, ~${est_cost:.2f})"
     )
 
+    global _last_client
     client = ClaudeClient(api_key=config.anthropic_api_key)
     comparisons = []
     total_discrepancies = 0
@@ -330,7 +372,6 @@ def run(config: Config) -> Path:
 
         context = _build_comparison_context(
             pair["figma_screen"],
-            figma_manifest,
             app_styles,
             pair["page_id"],
             page_info=pages_by_id.get(pair["page_id"]),
@@ -366,15 +407,23 @@ def run(config: Config) -> Path:
             }
             comparisons.append(comparison)
 
-            severity_counts = {}
-            for d in discrepancies:
-                sev = d.get("severity", "?")
-                severity_counts[sev] = severity_counts.get(sev, 0) + 1
-            sev_str = ", ".join(f"{v} {k}" for k, v in severity_counts.items())
-            console.print(
-                f"    {result.get('overall_fidelity', '?')} -- "
-                f"{len(discrepancies)} ecarts ({sev_str})"
-            )
+            fidelity = result.get("overall_fidelity", "unknown")
+
+            if fidelity == "mismatch":
+                console.print(
+                    "    [bold yellow]MISMATCH[/bold yellow] -- "
+                    "ecrans mal associes, comparaison ignoree"
+                )
+            else:
+                severity_counts = {}
+                for d in discrepancies:
+                    sev = d.get("severity", "?")
+                    severity_counts[sev] = severity_counts.get(sev, 0) + 1
+                sev_str = ", ".join(f"{v} {k}" for k, v in severity_counts.items())
+                console.print(
+                    f"    {fidelity} -- "
+                    f"{len(discrepancies)} ecarts ({sev_str})"
+                )
 
         except Exception as e:
             console.print(f"    [red]Error: {e}[/red]")
@@ -391,12 +440,17 @@ def run(config: Config) -> Path:
                 }
             )
 
+    _last_client = client
     client.print_usage()
 
-    # Statistics
+    # Statistics (exclude mismatches — their discrepancies are not real design gaps)
     by_severity = {"critical": 0, "important": 0, "minor": 0}
     by_category: dict[str, int] = {}
+    n_mismatches = 0
     for comp in comparisons:
+        if comp.get("overall_fidelity") == "mismatch":
+            n_mismatches += 1
+            continue
         for d in comp.get("discrepancies", []):
             sev = d.get("severity", "minor")
             by_severity[sev] = by_severity.get(sev, 0) + 1
@@ -408,6 +462,7 @@ def run(config: Config) -> Path:
         "statistics": {
             "total_screens": len(comparisons),
             "total_discrepancies": total_discrepancies,
+            "mismatches": n_mismatches,
             "by_severity": by_severity,
             "by_category": by_category,
         },
@@ -418,6 +473,8 @@ def run(config: Config) -> Path:
 
     console.print(f"\n[bold green]Comparisons saved to {discrepancies_path}[/bold green]")
     console.print(f"  {len(comparisons)} screens compared")
+    if n_mismatches:
+        console.print(f"  [bold yellow]{n_mismatches} mismatch(es) detecte(s)[/bold yellow]")
     console.print(f"  {total_discrepancies} ecarts total")
     console.print(
         f"  Critical: {by_severity['critical']}, "
