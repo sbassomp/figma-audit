@@ -157,27 +157,27 @@
 
 {% if mismatch_comparisons %}
 <div class="card mb-2">
-  <details>
-    <summary style="cursor:pointer;color:var(--text-muted);font-size:0.85rem;">
-      {{ mismatch_comparisons | length }} matching(s) suspect(s) — ecrans Figma mal associes
-    </summary>
-    <table style="margin-top:0.5rem;">
-      <thead>
-        <tr><th>Ecran Figma</th><th>Page</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for comp in mismatch_comparisons %}
-        <tr style="color:var(--text-muted);">
-          <td>{{ comp.screen_name }}</td>
-          <td class="mono text-sm">{{ comp.page_id }}</td>
-          <td>
-            <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ comp.page_id }}{% if comp.screen_id %}?screen_id={{ comp.screen_id }}{% endif %}" class="btn btn-sm" style="opacity:0.6;">Voir</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </details>
+  <h3 style="color: #f59e0b;">Ecrans non compares ({{ mismatch_comparisons | length }})</h3>
+  <p class="text-sm text-muted" style="margin-bottom:0.75rem;">
+    Ces ecrans Figma n'ont pas pu etre compares — mauvais matching, etat non capture, ou erreur de page.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Ecran Figma</th><th>Page associee</th><th>Diagnostic</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for comp in mismatch_comparisons %}
+      <tr>
+        <td>{{ comp.screen_name }}</td>
+        <td class="mono text-sm">{{ comp.page_id }}</td>
+        <td class="text-sm" style="color: #f59e0b;">{{ comp.mismatch_reason or 'Ecrans differents' }}</td>
+        <td>
+          <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ comp.page_id }}{% if comp.screen_id %}?screen_id={{ comp.screen_id }}{% endif %}" class="btn btn-sm">Voir</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 {% endif %}
 

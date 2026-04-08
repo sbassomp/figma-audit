@@ -976,6 +976,11 @@ def run_detail(
                 has_image = bool(sc and sc.image_path)
                 if sc:
                     screen_name = sc.name
+            # For mismatches, extract the reason from the MATCHING_ERROR description
+            mismatch_reason = ""
+            if d.overall_fidelity == "mismatch" and d.category == "MATCHING_ERROR":
+                mismatch_reason = d.description[:150]
+
             comparisons_list.append({
                 "page_id": d.page_id,
                 "screen_id": d.screen_id,
@@ -983,6 +988,7 @@ def run_detail(
                 "count": 0,
                 "fidelity": d.overall_fidelity,
                 "has_image": has_image,
+                "mismatch_reason": mismatch_reason,
             })
         # Increment count for this key
         for comp in comparisons_list:
