@@ -188,7 +188,12 @@ def run_progress(
         if run.started_at:
             from datetime import datetime, timezone
 
-            elapsed = (datetime.now(timezone.utc) - run.started_at).total_seconds()
+            now = datetime.now(timezone.utc)
+            started = run.started_at
+            # Handle naive datetimes from SQLite (assume UTC)
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            elapsed = (now - started).total_seconds()
         return tmpl.render(
             slug=slug,
             run_id=run_id,
