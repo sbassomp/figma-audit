@@ -19,10 +19,32 @@ def _get_version() -> str:
     return get_build_info()
 
 
+def _cleanup_stale_runs(db_path: str) -> None:
+    """Mark any 'running' runs as failed on startup (interrupted by restart)."""
+    from datetime import datetime, timezone
+
+    from sqlmodel import Session, select
+
+    from figma_audit.db.engine import get_engine
+    from figma_audit.db.models import Run
+
+    engine = get_engine(db_path)
+    with Session(engine) as session:
+        stale = session.exec(select(Run).where(Run.status == "running")).all()
+        for run in stale:
+            run.status = "failed"
+            run.error = "Interrupted by service restart"
+            run.finished_at = datetime.now(timezone.utc)
+            session.add(run)
+        if stale:
+            session.commit()
+
+
 def create_app(db_path: str = "figma-audit.db") -> FastAPI:
     """Create and configure the FastAPI application."""
     deps.set_db_path(db_path)
     init_db(db_path)
+    _cleanup_stale_runs(db_path)
 
     app = FastAPI(
         title="figma-audit",
