@@ -42,6 +42,7 @@ class ThresholdsConfig(BaseModel):
 class Config(BaseModel):
     project: str | None = None
     figma_url: str | None = None
+    figma_file: str | None = None
     figma_token: str | None = None
     app_url: str | None = None
     anthropic_api_key: str | None = None
@@ -77,14 +78,22 @@ class Config(BaseModel):
         return self.output_dir / "figma_screens"
 
     @property
-    def figma_file_key(self) -> str | None:
-        if not self.figma_url:
+    def figma_file_path(self) -> Path | None:
+        """Resolved path to local .fig file, if configured."""
+        if not self.figma_file:
             return None
-        # Extract file key from URL: .../design/<key>/... or .../file/<key>/...
-        parts = self.figma_url.split("/")
-        for i, part in enumerate(parts):
-            if part in ("design", "file") and i + 1 < len(parts):
-                return parts[i + 1]
+        return Path(self.figma_file).expanduser().resolve()
+
+    @property
+    def figma_file_key(self) -> str | None:
+        """Extract file key from Figma URL, or derive from .fig filename."""
+        if self.figma_url:
+            parts = self.figma_url.split("/")
+            for i, part in enumerate(parts):
+                if part in ("design", "file") and i + 1 < len(parts):
+                    return parts[i + 1]
+        if self.figma_file:
+            return Path(self.figma_file).stem
         return None
 
     @staticmethod
