@@ -258,26 +258,21 @@ def run(config: Config) -> Path:
 
     # Load obsolete screen IDs from DB (if available)
     obsolete_screen_ids: set[str] = set()
-    db_path = Path("figma-audit.db")
-    if not db_path.exists():
-        db_path = Path.home() / ".config" / "figma-audit" / "figma-audit.db"
-    if db_path.exists():
-        try:
-            from sqlmodel import Session, select
+    try:
+        from sqlmodel import Session, select
 
-            from figma_audit.db.engine import get_engine, init_db
-            from figma_audit.db.models import Screen
+        from figma_audit.db.engine import get_engine
+        from figma_audit.db.models import Screen
 
-            init_db(str(db_path))
-            engine = get_engine(str(db_path))
-            with Session(engine) as session:
-                screens = session.exec(select(Screen).where(Screen.status == "obsolete")).all()
-                obsolete_screen_ids = {s.figma_node_id for s in screens}
-            if obsolete_screen_ids:
-                n_obs = len(obsolete_screen_ids)
-                console.print(f"  [dim]{n_obs} ecran(s) obsolete(s) exclus[/dim]")
-        except Exception as e:
-            console.print(f"  [dim]DB obsolete check skipped: {e}[/dim]")
+        engine = get_engine()
+        with Session(engine) as session:
+            screens = session.exec(select(Screen).where(Screen.status == "obsolete")).all()
+            obsolete_screen_ids = {s.figma_node_id for s in screens}
+        if obsolete_screen_ids:
+            n_obs = len(obsolete_screen_ids)
+            console.print(f"  [dim]{n_obs} ecran(s) obsolete(s) exclus[/dim]")
+    except Exception as e:
+        console.print(f"  [dim]DB obsolete check skipped: {e}[/dim]")
 
     # Build comparison pairs from mapping
     pairs = []

@@ -168,6 +168,27 @@ def run(config: Config) -> Path:
     routes_text = _build_routes_description(pages_manifest)
     screens = figma_manifest.get("screens", [])
 
+    # Exclude obsolete screens from matching
+    obsolete_ids: set[str] = set()
+    try:
+        from sqlmodel import Session, select
+
+        from figma_audit.db.engine import get_engine
+        from figma_audit.db.models import Screen as DBScreen
+
+        engine = get_engine()
+        with Session(engine) as session:
+            obs = session.exec(select(DBScreen).where(DBScreen.status == "obsolete")).all()
+            obsolete_ids = {s.figma_node_id for s in obs}
+    except Exception:
+        pass
+    if obsolete_ids:
+        before = len(screens)
+        screens = [s for s in screens if s["id"] not in obsolete_ids]
+        n_excluded = before - len(screens)
+        if n_excluded:
+            console.print(f"  [dim]{n_excluded} ecran(s) obsolete(s) exclus du matching[/dim]")
+
     n_screens = len(screens)
     n_routes = len(pages_manifest.get("pages", []))
     console.print(f"[bold]Matching {n_screens} Figma screens to {n_routes} routes[/bold]")
