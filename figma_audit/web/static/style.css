@@ -164,6 +164,7 @@ body {
 .fidelity-good { background: #1a3a1a; color: #86efac; }
 .fidelity-acceptable { background: #2d2514; color: #fcd34d; }
 .fidelity-poor { background: #2d1618; color: #fca5a5; }
+.fidelity-mismatch { background: #2d2006; color: #f59e0b; border: 1px solid #f59e0b; }
 
 /* Tables */
 table {

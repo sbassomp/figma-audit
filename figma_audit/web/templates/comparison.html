@@ -16,6 +16,16 @@
   </div>
 </div>
 
+{% if fidelity == 'mismatch' %}
+<div class="card" style="border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); margin-bottom: 1rem;">
+  <div style="color: #f59e0b; font-weight: 700; font-size: 1rem; margin-bottom: 0.25rem;">Matching suspect</div>
+  <p class="text-sm" style="color: #fbbf24; margin: 0;">
+    Ces deux ecrans ne semblent pas correspondre. La comparaison ci-dessous n'est pas fiable.
+    Verifiez le mapping dans <code>screen_mapping.yaml</code> et relancez le run si necessaire.
+  </p>
+</div>
+{% endif %}
+
 <div class="side-by-side">
   <div class="image-col">
     <div class="image-label">Figma (reference)</div>
