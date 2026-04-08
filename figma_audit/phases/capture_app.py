@@ -545,8 +545,9 @@ async def _run_async(config: Config) -> Path:
         test_data["email"] = config.test_credentials.email
         test_data["otp"] = config.test_credentials.otp
 
-    # Populate app with test data via manifest-driven API calls
-    test_setup = pages_manifest.get("test_setup", {})
+    # Populate app with test data via API calls
+    # Priority: config YAML test_setup > manifest test_setup (AI-generated, less reliable)
+    test_setup = config.test_setup or pages_manifest.get("test_setup", {})
     created_item_ids: list[str] = []
     taken_item_id: str | None = None
     seed_account = config.seed_account.model_dump() if config.seed_account.email else None

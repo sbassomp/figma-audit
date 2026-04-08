@@ -52,6 +52,7 @@ class Config(BaseModel):
     thresholds: ThresholdsConfig = Field(default_factory=ThresholdsConfig)
     test_credentials: TestCredentials = Field(default_factory=TestCredentials)
     seed_account: SeedAccountConfig = Field(default_factory=SeedAccountConfig)
+    test_setup: dict = Field(default_factory=dict)
     include_routes: list[str] = Field(default_factory=list)
     exclude_routes: list[str] = Field(default_factory=list)
 
