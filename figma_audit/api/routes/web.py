@@ -887,21 +887,34 @@ def run_detail(
         by_severity[d.severity] = by_severity.get(d.severity, 0) + 1
         by_category[d.category] = by_category.get(d.category, 0) + 1
 
-    # Group discrepancies by page_id for comparison links
-    pages_with_discs = {}
+    # Group discrepancies by (page_id, screen_id) for comparison links
+    # This separates multiple Figma screens matched to the same page
+    comparisons_list = []
+    seen_keys: set[tuple] = set()
     for d in all_discs:
-        if d.page_id not in pages_with_discs:
+        key = (d.page_id, d.screen_id)
+        if key not in seen_keys:
+            seen_keys.add(key)
             has_image = False
+            screen_name = d.page_id
             if d.screen_id:
                 sc = session.get(Screen, d.screen_id)
                 has_image = bool(sc and sc.image_path)
-            pages_with_discs[d.page_id] = {
-                "count": 0,
+                if sc:
+                    screen_name = sc.name
+            comparisons_list.append({
+                "page_id": d.page_id,
                 "screen_id": d.screen_id,
+                "screen_name": screen_name,
+                "count": 0,
                 "fidelity": d.overall_fidelity,
                 "has_image": has_image,
-            }
-        pages_with_discs[d.page_id]["count"] += 1
+            })
+        # Increment count for this key
+        for comp in comparisons_list:
+            if (comp["page_id"], comp["screen_id"]) == key:
+                comp["count"] += 1
+                break
 
     # Parse execution details from progress_json (available for completed/failed runs)
     import json as _json
@@ -939,7 +952,7 @@ def run_detail(
             "discrepancies": discrepancies,
             "filter_severity": severity,
             "filter_status": status,
-            "pages_with_discs": pages_with_discs,
+            "comparisons_list": comparisons_list,
             "stats": {
                 "total_discrepancies": len(all_discs),
                 "total_captures": len(captures),
@@ -956,6 +969,7 @@ def comparison_view(
     slug: str,
     run_id: int,
     page_id: str,
+    screen_id: int | None = None,
     session: Session = Depends(get_session),
 ):
     project = session.exec(select(Project).where(Project.slug == slug)).first()
@@ -966,21 +980,20 @@ def comparison_view(
     if not run:
         return RedirectResponse(f"/projects/{slug}")
 
-    # Get discrepancies for this page
-    discs = session.exec(
-        select(Discrepancy)
-        .where(
-            Discrepancy.run_id == run_id,
-            Discrepancy.page_id == page_id,
-        )
-        .order_by(Discrepancy.severity)
-    ).all()
+    # Get discrepancies for this page, optionally filtered by screen
+    query = select(Discrepancy).where(
+        Discrepancy.run_id == run_id,
+        Discrepancy.page_id == page_id,
+    )
+    if screen_id:
+        query = query.where(Discrepancy.screen_id == screen_id)
+    discs = session.exec(query.order_by(Discrepancy.severity)).all()
 
     fidelity = discs[0].overall_fidelity if discs else "unknown"
 
     # Get the screen
-    screen_id = discs[0].screen_id if discs else None
-    screen = session.get(Screen, screen_id) if screen_id else None
+    disc_screen_id = screen_id or (discs[0].screen_id if discs else None)
+    screen = session.get(Screen, disc_screen_id) if disc_screen_id else None
 
     # Get the capture
     from figma_audit.db.models import Capture

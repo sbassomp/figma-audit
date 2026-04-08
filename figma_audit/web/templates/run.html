@@ -118,22 +118,23 @@
 </div>
 {% endif %}
 
-{% if pages_with_discs %}
+{% if comparisons_list %}
 <div class="card mb-2">
   <h3>Comparaisons par ecran</h3>
   <table>
     <thead>
-      <tr><th>Page</th><th>Ecarts</th><th>Fidelite</th><th></th></tr>
+      <tr><th>Ecran Figma</th><th>Page</th><th>Ecarts</th><th>Fidelite</th><th></th></tr>
     </thead>
     <tbody>
-      {% for pid, info in pages_with_discs.items() %}
+      {% for comp in comparisons_list %}
       <tr>
-        <td class="mono">{{ pid }}</td>
-        <td>{{ info.count }}</td>
-        <td>{% if info.fidelity %}<span class="fidelity-badge fidelity-{{ info.fidelity }}">{{ info.fidelity }}</span>{% endif %}</td>
+        <td>{{ comp.screen_name }}</td>
+        <td class="mono text-sm text-muted">{{ comp.page_id }}</td>
+        <td>{{ comp.count }}</td>
+        <td>{% if comp.fidelity %}<span class="fidelity-badge fidelity-{{ comp.fidelity }}">{{ comp.fidelity }}</span>{% endif %}</td>
         <td>
-          {% if info.has_image %}
-          <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ pid }}" class="btn btn-sm">Comparer</a>
+          {% if comp.has_image %}
+          <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ comp.page_id }}{% if comp.screen_id %}?screen_id={{ comp.screen_id }}{% endif %}" class="btn btn-sm">Comparer</a>
           {% else %}
           <span class="text-xs text-muted">Pas d'image Figma</span>
           {% endif %}
