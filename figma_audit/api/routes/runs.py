@@ -211,6 +211,7 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
         with open(figma_manifest_path) as f:
             manifest = json.load(f)
         for s in manifest.get("screens", []):
+            # Check by node ID first, then by name (handles re-exports with new node IDs)
             existing = session.exec(
                 select(Screen).where(
                     Screen.project_id == project.id,
@@ -218,21 +219,29 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
                 )
             ).first()
             if not existing:
-                # Inherit image_path from an existing screen with the same name
-                # (handles re-imports where figma_node_id changed but the screen
-                # is the same and already has an image from import-screens)
+                existing = session.exec(
+                    select(Screen).where(
+                        Screen.project_id == project.id,
+                        Screen.name == s["name"],
+                    )
+                ).first()
+            if existing:
+                # Update node ID and metadata on existing screen
+                existing.figma_node_id = s["id"]
+                existing.page = s.get("page", existing.page)
+                existing.width = s.get("width", existing.width)
+                existing.height = s.get("height", existing.height)
+                existing.metadata_json = json.dumps(
+                    {
+                        "background_color": s.get("background_color"),
+                        "element_count": len(s.get("elements", [])),
+                    }
+                )
+                if s.get("image_path") and not existing.image_path:
+                    existing.image_path = s.get("image_path")
+                session.add(existing)
+            else:
                 image_path = s.get("image_path")
-                if not image_path:
-                    sibling = session.exec(
-                        select(Screen).where(
-                            Screen.project_id == project.id,
-                            Screen.name == s["name"],
-                            Screen.image_path.is_not(None),  # type: ignore[union-attr]
-                        )
-                    ).first()
-                    if sibling:
-                        image_path = sibling.image_path
-
                 screen = Screen(
                     project_id=project.id,
                     figma_node_id=s["id"],
