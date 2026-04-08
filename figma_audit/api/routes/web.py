@@ -614,10 +614,15 @@ def run_detail(
     pages_with_discs = {}
     for d in all_discs:
         if d.page_id not in pages_with_discs:
+            has_image = False
+            if d.screen_id:
+                sc = session.get(Screen, d.screen_id)
+                has_image = bool(sc and sc.image_path)
             pages_with_discs[d.page_id] = {
                 "count": 0,
                 "screen_id": d.screen_id,
                 "fidelity": d.overall_fidelity,
+                "has_image": has_image,
             }
         pages_with_discs[d.page_id]["count"] += 1
 
