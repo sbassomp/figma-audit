@@ -367,15 +367,26 @@ def run(
         progress.start_phase(phase_name)
 
         if phase_name == "analyze":
-            from figma_audit.phases.analyze_code import run as run_analyze
+            manifest_path = cfg.output_dir / "pages_manifest.json"
 
-            run_analyze(cfg)
-            client = _get_last_client("analyze_code")
-            progress.finish_phase(
-                detail=f"{_count_pages(cfg)} pages",
-                cost=client.usage.cost(client.model) if client else 0,
-                tokens=client.usage.total_tokens if client else 0,
-            )
+            # Skip if manifest already exists (stable between runs)
+            if manifest_path.exists() and from_phase != "analyze":
+                n_pages = _count_pages(cfg)
+                console.print(
+                    f"  [dim]Manifest existant ({n_pages} pages) "
+                    f"— skip (utiliser --from analyze pour forcer)[/dim]"
+                )
+                progress.finish_phase(detail=f"{n_pages} pages (cached)")
+            else:
+                from figma_audit.phases.analyze_code import run as run_analyze
+
+                run_analyze(cfg)
+                client = _get_last_client("analyze_code")
+                progress.finish_phase(
+                    detail=f"{_count_pages(cfg)} pages",
+                    cost=client.usage.cost(client.model) if client else 0,
+                    tokens=client.usage.total_tokens if client else 0,
+                )
 
         elif phase_name == "figma":
             from figma_audit.phases.export_figma import run as run_figma
@@ -385,11 +396,28 @@ def run(
             progress.finish_phase(detail=f"{screens} ecrans")
 
         elif phase_name == "match":
+            import yaml
+
+            mapping_path = cfg.output_dir / "screen_mapping.yaml"
+
+            # Skip if mapping already exists and is verified (stable between runs)
+            if mapping_path.exists() and from_phase != "match":
+                with open(mapping_path) as f:
+                    existing = yaml.safe_load(f)
+                if existing and existing.get("verified"):
+                    matched = sum(
+                        1 for m in existing.get("mappings", []) if m.get("route")
+                    )
+                    console.print(
+                        f"  [dim]Mapping existant ({matched} matches, verified) "
+                        f"— skip (utiliser --from match pour forcer)[/dim]"
+                    )
+                    progress.finish_phase(detail=f"{matched} matches (cached)")
+                    continue
+
             from figma_audit.phases.match_screens import run as run_match
 
             mapping_path = run_match(cfg)
-            import yaml
-
             with open(mapping_path) as f:
                 data = yaml.safe_load(f)
             if not data.get("verified"):

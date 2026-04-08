@@ -671,6 +671,14 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
                 _save_progress()
 
                 if phase_name == "analyze":
+                    manifest_file = Path(cfg.output_dir) / "pages_manifest.json"
+                    if manifest_file.exists():
+                        n_pages = _count_json("pages_manifest.json", "pages")
+                        _step(f"Manifest existant ({n_pages} pages) — skip")
+                        progress.finish_phase(detail=f"{n_pages} pages (cached)")
+                        _save_progress()
+                        continue
+
                     _step("Lecture des fichiers source...")
                     from figma_audit.phases.analyze_code import run as run_analyze
 
@@ -691,6 +699,25 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
 
                 elif phase_name == "match":
                     import yaml
+
+                    mapping_path = Path(cfg.output_dir) / "screen_mapping.yaml"
+
+                    # Skip if mapping already exists and is verified
+                    if mapping_path.exists():
+                        with open(mapping_path) as f:
+                            existing = yaml.safe_load(f)
+                        if existing and existing.get("verified"):
+                            matched = sum(
+                                1
+                                for m in existing.get("mappings", [])
+                                if m.get("route")
+                            )
+                            _step(f"Mapping existant ({matched} matches) — skip")
+                            progress.finish_phase(
+                                detail=f"{matched} matches (cached)"
+                            )
+                            _save_progress()
+                            continue
 
                     _step("Envoi des ecrans a Claude Vision...")
                     from figma_audit.phases.match_screens import run as run_match
