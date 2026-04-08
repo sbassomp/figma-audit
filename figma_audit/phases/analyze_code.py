@@ -55,6 +55,26 @@ PAGE_PATTERNS = {
     ],
 }
 
+# Patterns to find API client / service / repository files
+API_PATTERNS = {
+    "flutter": [
+        "**/api/**/*.dart",
+        "**/service/**/*.dart",
+        "**/services/**/*.dart",
+        "**/repository/**/*.dart",
+        "**/repositories/**/*.dart",
+        "**/data/remote/**/*.dart",
+        "**/data/datasource/**/*.dart",
+        "**/client/**/*.dart",
+    ],
+    "react": [
+        "**/api/**/*.{ts,tsx,js,jsx}",
+        "**/services/**/*.{ts,tsx,js,jsx}",
+        "**/hooks/use*Api*.{ts,tsx}",
+        "**/lib/api*.{ts,js}",
+    ],
+}
+
 # Patterns to find design token files
 TOKEN_PATTERNS = {
     "flutter": [
@@ -131,23 +151,39 @@ def _build_prompt(
     router_files: dict[str, str],
     page_files: dict[str, str],
     token_files: dict[str, str],
+    api_files: dict[str, str],
     project_dir: Path,
 ) -> str:
     """Build the user prompt with all source files."""
     sections: list[str] = []
+    lang = "dart" if framework == "flutter" else "typescript"
 
     sections.append(f"## Framework: {framework}\n")
 
     # Router files (most important)
     sections.append("## Router / Navigation Files\n")
     for rel_path, content in router_files.items():
-        sections.append(f"### {rel_path}\n```dart\n{content}\n```\n")
+        sections.append(f"### {rel_path}\n```{lang}\n{content}\n```\n")
+
+    # API / service files (for test_setup generation)
+    if api_files:
+        sections.append("## API Client / Service Files\n")
+        sections.append(
+            "(Use these to generate accurate test_setup with real endpoints and payloads)\n"
+        )
+        total_size = sum(len(s) for s in sections)
+        for rel_path, content in api_files.items():
+            entry = f"### {rel_path}\n```{lang}\n{content}\n```\n"
+            if total_size + len(entry) > MAX_TOTAL_PROMPT_SIZE // 2:
+                break
+            sections.append(entry)
+            total_size += len(entry)
 
     # Design token files
     if token_files:
         sections.append("## Design Token Files\n")
         for rel_path, content in token_files.items():
-            sections.append(f"### {rel_path}\n```dart\n{content}\n```\n")
+            sections.append(f"### {rel_path}\n```{lang}\n{content}\n```\n")
 
     # Page files — include as many as we can fit
     total_size = sum(len(s) for s in sections)
@@ -206,6 +242,14 @@ CSS selectors when possible, as Flutter CanvasKit apps may not have DOM elements
 - For test_data: suggest realistic test values for forms \
 (French context: phone +33..., French addresses).
 - Extract design tokens from the theme/token files into a structured format.
+- For test_setup: analyze the API client/service files to find the EXACT endpoints, \
+HTTP methods, request payloads, and authentication flow used by the app. \
+Include auth_endpoint (the login/verify endpoint), auth_payload (with ${test_data.key} \
+templates for credentials), auth_otp_request_endpoint (if the auth flow has a separate \
+OTP request step), auth_token_path (dotted path to the token in the response), \
+seed_items (API calls to create test data, with exact endpoint paths and payload structure \
+from the code), take_item (to transition an item to a different state), and cleanup_endpoint. \
+CRITICAL: use the real endpoints and payload field names from the API client code — do NOT guess.
 
 JSON Schema to follow:
 {
@@ -310,10 +354,12 @@ def run(config: Config) -> Path:
     router_paths = _find_files(project_dir, ROUTER_PATTERNS.get(framework, []))
     page_paths = _find_files(project_dir, PAGE_PATTERNS.get(framework, []))
     token_paths = _find_files(project_dir, TOKEN_PATTERNS.get(framework, []))
+    api_paths = _find_files(project_dir, API_PATTERNS.get(framework, []))
 
     console.print(f"  Router files: {len(router_paths)}")
     console.print(f"  Page files:   {len(page_paths)}")
     console.print(f"  Token files:  {len(token_paths)}")
+    console.print(f"  API files:    {len(api_paths)}")
 
     if not router_paths:
         raise FileNotFoundError(
@@ -334,16 +380,20 @@ def run(config: Config) -> Path:
     router_files = _read_files(router_paths)
     page_files = _read_files(page_paths)
     token_files = _read_files(token_paths)
+    api_files = _read_files(api_paths)
 
     total_chars = (
         sum(len(v) for v in router_files.values())
         + sum(len(v) for v in page_files.values())
         + sum(len(v) for v in token_files.values())
+        + sum(len(v) for v in api_files.values())
     )
     console.print(f"  Total source: {total_chars:,} chars")
 
     # ── Step 4: Build prompt and call Claude ───────────────────────
-    user_prompt = _build_prompt(framework, router_files, page_files, token_files, project_dir)
+    user_prompt = _build_prompt(
+        framework, router_files, page_files, token_files, api_files, project_dir
+    )
     console.print(f"  Prompt size: {len(user_prompt):,} chars")
     console.print("[bold]Sending to Claude for analysis...[/bold]")
 
