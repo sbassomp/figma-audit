@@ -124,20 +124,23 @@
 </div>
 {% endif %}
 
-{% if comparisons_list %}
+{% set valid_comparisons = comparisons_list | selectattr('fidelity', '!=', 'mismatch') | list %}
+{% set mismatch_comparisons = comparisons_list | selectattr('fidelity', '==', 'mismatch') | list %}
+
+{% if valid_comparisons %}
 <div class="card mb-2">
-  <h3>Comparaisons par ecran</h3>
+  <h3>Comparaisons par ecran ({{ valid_comparisons | length }})</h3>
   <table>
     <thead>
       <tr><th>Ecran Figma</th><th>Page</th><th>Ecarts</th><th>Fidelite</th><th></th></tr>
     </thead>
     <tbody>
-      {% for comp in comparisons_list %}
+      {% for comp in valid_comparisons %}
       <tr>
         <td>{{ comp.screen_name }}</td>
         <td class="mono text-sm text-muted">{{ comp.page_id }}</td>
         <td>{{ comp.count }}</td>
-        <td>{% if comp.fidelity %}<span class="fidelity-badge fidelity-{{ comp.fidelity }}">{{ comp.fidelity }}</span>{% endif %}</td>
+        <td><span class="fidelity-badge fidelity-{{ comp.fidelity }}">{{ comp.fidelity }}</span></td>
         <td>
           {% if comp.has_image %}
           <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ comp.page_id }}{% if comp.screen_id %}?screen_id={{ comp.screen_id }}{% endif %}" class="btn btn-sm">Comparer</a>
@@ -149,6 +152,32 @@
       {% endfor %}
     </tbody>
   </table>
+</div>
+{% endif %}
+
+{% if mismatch_comparisons %}
+<div class="card mb-2">
+  <details>
+    <summary style="cursor:pointer;color:var(--text-muted);font-size:0.85rem;">
+      {{ mismatch_comparisons | length }} matching(s) suspect(s) — ecrans Figma mal associes
+    </summary>
+    <table style="margin-top:0.5rem;">
+      <thead>
+        <tr><th>Ecran Figma</th><th>Page</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for comp in mismatch_comparisons %}
+        <tr style="color:var(--text-muted);">
+          <td>{{ comp.screen_name }}</td>
+          <td class="mono text-sm">{{ comp.page_id }}</td>
+          <td>
+            <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ comp.page_id }}{% if comp.screen_id %}?screen_id={{ comp.screen_id }}{% endif %}" class="btn btn-sm" style="opacity:0.6;">Voir</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
 </div>
 {% endif %}
 

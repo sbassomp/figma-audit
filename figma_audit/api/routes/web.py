@@ -950,9 +950,13 @@ def run_detail(
     all_discs = session.exec(select(Discrepancy).where(Discrepancy.run_id == run_id)).all()
     dismissed_statuses = {"ignored", "wontfix"}
     n_dismissed = 0
+    n_mismatches = 0
     for d in all_discs:
         if d.status in dismissed_statuses:
             n_dismissed += 1
+            continue
+        if d.category == "MATCHING_ERROR":
+            n_mismatches += 1
             continue
         by_severity[d.severity] = by_severity.get(d.severity, 0) + 1
         by_category[d.category] = by_category.get(d.category, 0) + 1
