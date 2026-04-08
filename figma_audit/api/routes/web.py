@@ -499,7 +499,10 @@ def _process_fig_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
             progress["steps"][3]["status"] = "running"
             created = 0
             updated = 0
+            imported_node_ids: set[str] = set()
+
             for s in manifest.screens:
+                imported_node_ids.add(s.id)
                 existing = session.exec(
                     select(DBScreen).where(
                         DBScreen.project_id == project.id,
@@ -518,6 +521,9 @@ def _process_fig_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
                     existing.metadata_json = meta
                     if s.image_path and not existing.image_path:
                         existing.image_path = s.image_path
+                    # Restore if was obsolete (screen is back in the .fig)
+                    if existing.status == "obsolete":
+                        existing.status = "current"
                     session.add(existing)
                     updated += 1
                 else:
@@ -546,10 +552,36 @@ def _process_fig_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
                     )
                     session.add(screen)
                     created += 1
+
+            # Mark screens absent from the new .fig as obsolete
+            n_obsoleted = 0
+            all_db_screens = session.exec(
+                select(DBScreen).where(
+                    DBScreen.project_id == project.id,
+                    DBScreen.status == "current",
+                )
+            ).all()
+            for sc in all_db_screens:
+                if sc.figma_node_id not in imported_node_ids:
+                    sc.status = "obsolete"
+                    session.add(sc)
+                    n_obsoleted += 1
+
             session.commit()
 
+            # Invalidate cached mapping + manifest (force re-matching on next run)
+            mapping_file = output_dir / "screen_mapping.yaml"
+            manifest_file = output_dir / "pages_manifest.json"
+            if mapping_file.exists():
+                mapping_file.unlink()
+            if manifest_file.exists():
+                manifest_file.unlink()
+
+            detail = f"{created} new, {updated} maj"
+            if n_obsoleted:
+                detail += f", {n_obsoleted} obsolete"
             progress["steps"][3]["status"] = "done"
-            progress["steps"][3]["detail"] = f"{created} new, {updated} maj"
+            progress["steps"][3]["detail"] = detail
 
     except Exception as e:
         progress["error"] = str(e)[:200]
