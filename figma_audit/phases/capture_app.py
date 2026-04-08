@@ -23,6 +23,15 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
 
     if action == "navigate":
         url = step.get("url", "")
+        # Resolve ${test_data.key} templates in URLs (e.g. /courses/${test_data.course_id})
+        import re as _re
+
+        for match in _re.finditer(r"\$\{([^}]+)\}", url):
+            key = match.group(1)
+            if key.startswith("test_data."):
+                key = key[len("test_data."):]
+            val = _resolve_test_data(test_data, key)
+            url = url.replace(match.group(0), val)
         if url.startswith("/"):
             url = page.url.split("/")[0] + "//" + page.url.split("/")[2] + url
         await page.goto(url, wait_until="networkidle", timeout=timeout)
@@ -512,6 +521,11 @@ async def _run_async(config: Config) -> Path:
     seed_account = config.seed_account.model_dump() if config.seed_account.email else None
     if (seed_account or test_data.get("email")) and app_url:
         created_course_ids = _setup_test_data(app_url, test_data, seed_account=seed_account)
+
+    # Inject created course IDs into test_data for navigation_steps templates
+    if created_course_ids:
+        test_data["course_id"] = created_course_ids[0]
+        test_data["course_ids"] = created_course_ids
 
     # Launch browser
     async with async_playwright() as pw:
