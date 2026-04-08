@@ -7,11 +7,15 @@
     <h2>{{ project.name }}</h2>
     <p class="subtitle">{{ project.app_url or 'Pas d\'URL configuree' }}</p>
   </div>
-  <div class="flex gap-1">
+  <div class="flex gap-1 flex-wrap">
     <a href="/projects/{{ project.slug }}/screens" class="btn">Ecrans Figma</a>
+    <form hx-post="/projects/{{ project.slug }}/upload-fig" hx-target="#upload-area" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="flex gap-1 items-center">
+      <input type="file" name="file" accept=".fig" style="max-width: 180px;" required>
+      <button type="submit" class="btn">Importer .fig</button>
+    </form>
     <form hx-post="/projects/{{ project.slug }}/upload-screens" hx-target="#upload-area" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="flex gap-1 items-center">
-      <input type="file" name="file" accept=".zip" style="max-width: 200px;" required>
-      <button type="submit" class="btn">Importer Figma</button>
+      <input type="file" name="file" accept=".zip" style="max-width: 180px;" required>
+      <button type="submit" class="btn">Importer images</button>
     </form>
     <form method="POST" action="/projects/{{ project.slug }}/start-run">
       <button type="submit" class="btn btn-primary">Lancer un run</button>

@@ -127,6 +127,35 @@ def upload_progress(
     )
 
 
+@router.get("/upload-fig-progress", response_class=HTMLResponse)
+def upload_fig_progress(
+    slug: str,
+    project: Project = Depends(get_project),
+) -> str:
+    """Return .fig upload progress HTML fragment, polled by htmx."""
+    from pathlib import Path
+
+    from jinja2 import Environment, FileSystemLoader
+
+    from figma_audit.api.routes.web import _upload_progress
+
+    tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
+    env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
+    tmpl = env.get_template("upload_progress.html")
+
+    progress_key = f"{slug}_fig"
+    progress = _upload_progress.get(progress_key, {})
+    if not progress:
+        return "<div></div>"
+
+    return tmpl.render(
+        slug=slug,
+        polling=not progress.get("done", False),
+        progress_key="fig",
+        **progress,
+    )
+
+
 @router.get("/runs/{run_id}/progress", response_class=HTMLResponse)
 def run_progress(
     slug: str,

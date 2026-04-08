@@ -1,5 +1,5 @@
 <div id="upload-progress"
-     {% if polling %}hx-get="/htmx/projects/{{ slug }}/upload-progress" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
+     {% if polling %}hx-get="/htmx/projects/{{ slug }}/upload-{% if progress_key %}{{ progress_key }}-{% endif %}progress" hx-trigger="every 2s" hx-swap="outerHTML"{% endif %}>
   <div class="card" style="margin-top: 1rem;">
     <h3 style="color: var(--accent);">Import Figma</h3>
     <div style="margin-top: 0.75rem;">
