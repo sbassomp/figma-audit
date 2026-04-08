@@ -38,6 +38,7 @@ def cli() -> None:
 
 @cli.command()
 @click.option("--figma-url", envvar="FIGMA_URL", help="Figma file URL")
+@click.option("--figma-file", type=click.Path(exists=True), help="Local .fig file (offline)")
 @click.option("--figma-token", envvar="FIGMA_TOKEN", help="Figma API token")
 @click.option("--output", "-o", default=None, help="Output directory")
 @click.option("--config", "config_path", type=click.Path(exists=True), help="Config YAML file")
@@ -46,6 +47,7 @@ def cli() -> None:
 @click.option("--target-page", help="Figma page ID to focus on (e.g. '45:927')")
 def figma(
     figma_url: str | None,
+    figma_file: str | None,
     figma_token: str | None,
     output: str | None,
     config_path: str | None,
@@ -54,9 +56,12 @@ def figma(
     target_page: str | None,
 ) -> None:
     """Phase 2: Export Figma file -- download tree, extract tokens, export PNGs."""
+    if figma_file and figma_url:
+        raise click.UsageError("Use either --figma-file or --figma-url, not both.")
     cfg = Config.load(
         config_path=_find_config(config_path),
         figma_url=figma_url,
+        figma_file=figma_file,
         figma_token=figma_token,
         output=output,
     )
@@ -326,11 +331,13 @@ PHASE_NAMES = {
 @cli.command()
 @click.option("--config", "config_path", type=click.Path(exists=True), help="Config YAML file")
 @click.option("--from", "from_phase", type=click.Choice(PHASE_ORDER), help="Resume from phase")
+@click.option("--figma-file", type=click.Path(exists=True), help="Local .fig file (Phase 2)")
 @click.option("--target-page", help="Figma page ID (Phase 2)")
 @click.option("--offline", is_flag=True, help="Figma offline mode (Phase 2)")
 def run(
     config_path: str | None,
     from_phase: str | None,
+    figma_file: str | None,
     target_page: str | None,
     offline: bool,
 ) -> None:
@@ -344,7 +351,7 @@ def run(
     if not check_api_keys():
         sys.exit(1)
 
-    cfg = Config.load(config_path=_find_config(config_path))
+    cfg = Config.load(config_path=_find_config(config_path), figma_file=figma_file)
 
     phases = list(PHASE_ORDER)
     if from_phase:
@@ -435,15 +442,21 @@ def run(
     set_progress(None)
 
 
-def _get_last_client(module_hint: str):
-    """Try to retrieve the ClaudeClient from a recently-run phase module."""
-    # Phases create their client locally; we inspect the module globals
-    # This is a best-effort approach
+def _get_last_client(phase_name: str):
+    """Retrieve the ClaudeClient exposed by a phase module after run()."""
+    _phase_modules = {
+        "analyze": "figma_audit.phases.analyze_code",
+        "analyze_code": "figma_audit.phases.analyze_code",
+        "match": "figma_audit.phases.match_screens",
+        "match_screens": "figma_audit.phases.match_screens",
+        "compare": "figma_audit.phases.compare",
+    }
     import sys
 
-    for mod_name, mod in sys.modules.items():
-        if module_hint in mod_name and hasattr(mod, "client"):
-            return mod.client
+    mod_name = _phase_modules.get(phase_name, "")
+    mod = sys.modules.get(mod_name)
+    if mod:
+        return getattr(mod, "_last_client", None)
     return None
 
 

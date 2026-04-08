@@ -106,12 +106,16 @@ class RunProgress:
 
     def to_dict(self) -> dict:
         """Serialize for web UI / API."""
+        total_cost = sum(r.cost for r in self.phase_results)
+        total_tokens = sum(r.tokens for r in self.phase_results)
         return {
             "current_phase": self.current_phase,
             "current_step": self.current_step,
             "current_progress": self.current_progress,
             "current_total": self.current_total,
             "elapsed": time.time() - self.started_at,
+            "total_cost": total_cost,
+            "total_tokens": total_tokens,
             "phases": [
                 {
                     "name": p,
@@ -126,6 +130,9 @@ class RunProgress:
                     "duration": next((r.duration for r in self.phase_results if r.name == p), None),
                     "detail": next((r.detail for r in self.phase_results if r.name == p), None),
                     "cost": next((r.cost for r in self.phase_results if r.name == p), None),
+                    "tokens": next(
+                        (r.tokens for r in self.phase_results if r.name == p), None
+                    ),
                 }
                 for p in self.phases
             ],

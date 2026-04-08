@@ -58,6 +58,16 @@
     </div>
     {% endif %}
 
+    {% set ns = namespace(total_cost=0) %}
+    {% for phase in phases %}
+      {% if phase.cost %}{% set ns.total_cost = ns.total_cost + phase.cost %}{% endif %}
+    {% endfor %}
+    {% if ns.total_cost > 0 %}
+    <div class="text-xs text-muted mt-1" style="padding-left: 28px;">
+      Cout cumule: <strong>~${{ "%.3f" | format(ns.total_cost) }}</strong>
+    </div>
+    {% endif %}
+
     {% if polling %}
     <div class="text-xs text-muted mt-2" style="padding-left: 28px;">
       Temps ecoule: <span id="elapsed-timer"></span>

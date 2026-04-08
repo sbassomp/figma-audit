@@ -337,6 +337,227 @@ def _process_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
         progress["done"] = True
 
 
+# ── .fig file upload ──────────────────────────────────────────────
+
+# Reuse _upload_progress dict (keyed by slug + "_fig" to avoid collision)
+
+
+@router.post("/projects/{slug}/upload-fig", response_class=HTMLResponse)
+def upload_fig(
+    request: Request,
+    slug: str,
+    file: UploadFile,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+):
+    """Upload a .fig file. Parses design tree, builds manifest, syncs screens to DB."""
+    import shutil
+    import tempfile
+
+    project = session.exec(select(Project).where(Project.slug == slug)).first()
+    if not project:
+        return "<div>Projet non trouve</div>"
+
+    with tempfile.NamedTemporaryFile(suffix=".fig", delete=False) as tmp:
+        shutil.copyfileobj(file.file, tmp)
+        tmp_path = tmp.name
+
+    progress_key = f"{slug}_fig"
+    _upload_progress[progress_key] = {
+        "steps": [
+            {"label": "Parsing du fichier .fig", "status": "running", "detail": ""},
+            {"label": "Identification des ecrans", "status": "pending", "detail": ""},
+            {"label": "Extraction des design tokens", "status": "pending", "detail": ""},
+            {"label": "Synchronisation DB", "status": "pending", "detail": ""},
+        ],
+        "progress_current": 0,
+        "progress_total": 0,
+        "done": False,
+        "error": None,
+    }
+
+    background_tasks.add_task(_process_fig_upload_bg, slug, tmp_path, project.id)
+
+    tmpl_dir = Path(__file__).parent.parent.parent / "web" / "templates"
+    from jinja2 import Environment, FileSystemLoader
+
+    env = Environment(loader=FileSystemLoader(str(tmpl_dir)))
+    tmpl = env.get_template("upload_progress.html")
+    return HTMLResponse(
+        tmpl.render(
+            slug=slug,
+            polling=True,
+            progress_key="fig",
+            **_upload_progress[progress_key],
+        )
+    )
+
+
+def _process_fig_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
+    """Parse .fig file in background, build manifest, sync screens to DB."""
+    import json
+
+    from sqlmodel import Session, select
+
+    from figma_audit.db.engine import get_engine
+    from figma_audit.db.models import Project
+    from figma_audit.db.models import Screen as DBScreen
+
+    progress_key = f"{slug}_fig"
+    progress = _upload_progress[progress_key]
+
+    try:
+        engine = get_engine()
+        with Session(engine) as session:
+            project = session.get(Project, project_id)
+            if not project:
+                progress["error"] = "Projet non trouve"
+                progress["done"] = True
+                return
+
+            output_dir = Path(project.output_dir).expanduser().resolve()
+            output_dir.mkdir(parents=True, exist_ok=True)
+            manifest_path = output_dir / "figma_manifest.json"
+            cache_dir = output_dir / "figma_raw"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+
+            # Step 1: Parse .fig file
+            from figma_audit.utils.fig_parser import parse_fig_file
+
+            file_data = parse_fig_file(tmp_path)
+            file_name = file_data.get("name", "design")
+
+            # Cache the parsed tree
+            with open(cache_dir / "file.json", "w") as f:
+                json.dump(file_data, f, indent=2, ensure_ascii=False)
+
+            progress["steps"][0]["status"] = "done"
+            progress["steps"][0]["detail"] = file_name
+
+            # Step 2: Identify screens
+            progress["steps"][1]["status"] = "running"
+            from figma_audit.phases.export_figma import _identify_screens
+
+            screens = _identify_screens(file_data)
+            progress["steps"][1]["status"] = "done"
+            progress["steps"][1]["detail"] = f"{len(screens)} ecrans"
+
+            # Step 3: Extract elements and build manifest
+            progress["steps"][2]["status"] = "running"
+            progress["progress_total"] = len(screens)
+
+            from figma_audit.models import FigmaManifest, FigmaScreen
+            from figma_audit.phases.export_figma import (
+                _extract_background_color,
+                _extract_elements,
+            )
+            from figma_audit.utils.figma_client import save_cache
+
+            screens_dir = output_dir / "figma_screens"
+            screens_dir.mkdir(parents=True, exist_ok=True)
+
+            figma_screens = []
+            for i, s in enumerate(screens):
+                node = s["node"]
+                bg = _extract_background_color(node)
+                elements = _extract_elements(node)
+
+                # Check if image already exists from a previous import-screens
+                image_path = f"figma_screens/{s['filename']}"
+                if not (output_dir / image_path).exists():
+                    image_path = None
+
+                figma_screens.append(
+                    FigmaScreen(
+                        id=s["id"],
+                        name=s["name"],
+                        page=s["page"],
+                        width=s["width"],
+                        height=s["height"],
+                        image_path=image_path,
+                        background_color=bg,
+                        elements=elements,
+                    )
+                )
+                progress["progress_current"] = i + 1
+
+            file_key = Path(tmp_path).stem
+            manifest = FigmaManifest(
+                file_key=file_key,
+                file_name=file_name,
+                screens=figma_screens,
+            )
+            save_cache(manifest.model_dump(), manifest_path)
+
+            total_elements = sum(len(s.elements) for s in figma_screens)
+            progress["steps"][2]["status"] = "done"
+            progress["steps"][2]["detail"] = f"{total_elements} tokens"
+            progress["progress_current"] = 0
+            progress["progress_total"] = 0
+
+            # Step 4: Sync to DB
+            progress["steps"][3]["status"] = "running"
+            created = 0
+            updated = 0
+            for s in manifest.screens:
+                existing = session.exec(
+                    select(DBScreen).where(
+                        DBScreen.project_id == project.id,
+                        DBScreen.figma_node_id == s.id,
+                    )
+                ).first()
+                meta = json.dumps({
+                    "background_color": s.background_color,
+                    "element_count": len(s.elements),
+                })
+                if existing:
+                    existing.name = s.name
+                    existing.page = s.page
+                    existing.width = s.width
+                    existing.height = s.height
+                    existing.metadata_json = meta
+                    if s.image_path and not existing.image_path:
+                        existing.image_path = s.image_path
+                    session.add(existing)
+                    updated += 1
+                else:
+                    # Inherit image from existing screen with same name
+                    image_path = s.image_path
+                    if not image_path:
+                        sibling = session.exec(
+                            select(DBScreen).where(
+                                DBScreen.project_id == project.id,
+                                DBScreen.name == s.name,
+                                DBScreen.image_path.is_not(None),  # type: ignore[union-attr]
+                            )
+                        ).first()
+                        if sibling:
+                            image_path = sibling.image_path
+
+                    screen = DBScreen(
+                        project_id=project.id,
+                        figma_node_id=s.id,
+                        name=s.name,
+                        page=s.page,
+                        width=s.width,
+                        height=s.height,
+                        image_path=image_path,
+                        metadata_json=meta,
+                    )
+                    session.add(screen)
+                    created += 1
+            session.commit()
+
+            progress["steps"][3]["status"] = "done"
+            progress["steps"][3]["detail"] = f"{created} new, {updated} maj"
+
+    except Exception as e:
+        progress["error"] = str(e)[:200]
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+        progress["done"] = True
+
+
 @router.post("/projects/{slug}/start-run")
 def start_run(
     slug: str,
@@ -421,21 +642,52 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
                 progress.update(step=msg)
                 _save_progress()
 
+            def _phase_cost(phase_name: str) -> tuple[float, int]:
+                """Retrieve cost and tokens from the AI phase's client."""
+                _phase_modules = {
+                    "analyze": "figma_audit.phases.analyze_code",
+                    "match": "figma_audit.phases.match_screens",
+                    "compare": "figma_audit.phases.compare",
+                }
+                import sys
+
+                mod_name = _phase_modules.get(phase_name, "")
+                mod = sys.modules.get(mod_name)
+                if mod:
+                    client = getattr(mod, "_last_client", None)
+                    if client:
+                        return client.usage.cost(client.model), client.usage.total_tokens
+                return 0.0, 0
+
+            def _count_json(filename: str, key: str) -> int:
+                path = Path(cfg.output_dir) / filename
+                if path.exists():
+                    with open(path) as f:
+                        return len(json.load(f).get(key, []))
+                return 0
+
             for phase_name in phases:
                 progress.start_phase(phase_name)
                 _save_progress()
 
                 if phase_name == "analyze":
-                    _step("Lecture des fichiers source (~133K tokens)...")
+                    _step("Lecture des fichiers source...")
                     from figma_audit.phases.analyze_code import run as run_analyze
 
                     run_analyze(cfg)
+                    cost, tokens = _phase_cost("analyze")
+                    n_pages = _count_json("pages_manifest.json", "pages")
+                    progress.finish_phase(
+                        detail=f"{n_pages} pages", cost=cost, tokens=tokens
+                    )
 
                 elif phase_name == "figma":
                     _step("Lecture du cache Figma...")
                     from figma_audit.phases.export_figma import run as run_figma
 
                     run_figma(cfg, offline=True)
+                    n_screens = _count_json("figma_manifest.json", "screens")
+                    progress.finish_phase(detail=f"{n_screens} ecrans")
 
                 elif phase_name == "match":
                     import yaml
@@ -456,26 +708,51 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
                                 allow_unicode=True,
                                 sort_keys=False,
                             )
+                    matched = sum(1 for m in data.get("mappings", []) if m.get("route"))
+                    cost, tokens = _phase_cost("match")
+                    progress.finish_phase(
+                        detail=f"{matched} matches", cost=cost, tokens=tokens
+                    )
 
                 elif phase_name == "capture":
                     _step("Login + creation donnees de test...")
                     from figma_audit.phases.capture_app import run as run_capture
 
                     run_capture(cfg)
+                    # app_captures.json is a list, not a dict with a key
+                    cap_path = Path(cfg.output_dir) / "app_captures.json"
+                    n_caps = 0
+                    if cap_path.exists():
+                        with open(cap_path) as f:
+                            cap_data = json.load(f)
+                            n_caps = len(cap_data) if isinstance(cap_data, list) else 0
+                    progress.finish_phase(detail=f"{n_caps} pages")
 
                 elif phase_name == "compare":
                     _step("Comparaison Figma vs App par Claude Vision...")
                     from figma_audit.phases.compare import run as run_compare
 
                     run_compare(cfg)
+                    cost, tokens = _phase_cost("compare")
+                    disc_path = Path(cfg.output_dir) / "discrepancies.json"
+                    n_discs = 0
+                    if disc_path.exists():
+                        with open(disc_path) as f:
+                            n_discs = json.load(f).get("statistics", {}).get(
+                                "total_discrepancies", 0
+                            )
+                    progress.finish_phase(
+                        detail=f"{n_discs} ecarts", cost=cost, tokens=tokens
+                    )
 
                 elif phase_name == "report":
                     _step("Generation du rapport HTML...")
                     from figma_audit.phases.report import run as run_report
 
-                    run_report(cfg)
+                    report_path = run_report(cfg)
+                    size_mb = report_path.stat().st_size / 1024 / 1024
+                    progress.finish_phase(detail=f"{size_mb:.1f} MB")
 
-                progress.finish_phase()
                 _save_progress()
 
             # Import results into DB
@@ -626,6 +903,21 @@ def run_detail(
             }
         pages_with_discs[d.page_id]["count"] += 1
 
+    # Parse execution details from progress_json (available for completed/failed runs)
+    import json as _json
+
+    execution = None
+    if run.progress_json:
+        try:
+            execution = _json.loads(run.progress_json)
+        except (ValueError, TypeError):
+            pass
+
+    # Compute run duration
+    run_duration = None
+    if run.started_at and run.finished_at:
+        run_duration = (run.finished_at - run.started_at).total_seconds()
+
     return templates.TemplateResponse(
         request,
         "run.html",
@@ -638,8 +930,12 @@ def run_detail(
                 "status": run.status,
                 "current_phase": run.current_phase,
                 "created_at": run.created_at.isoformat(),
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+                "duration": run_duration,
                 "error": run.error,
             },
+            "execution": execution,
             "discrepancies": discrepancies,
             "filter_severity": severity,
             "filter_status": status,

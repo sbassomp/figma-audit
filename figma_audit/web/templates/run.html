@@ -38,11 +38,83 @@
     <div class="stat-value">{{ stats.by_severity.minor or 0 }}</div>
     <div class="stat-label">Minor</div>
   </div>
+  {% if execution and execution.total_cost %}
+  <div class="stat-card">
+    <div class="stat-value">~${{ "%.2f" | format(execution.total_cost) }}</div>
+    <div class="stat-label">Cout API</div>
+  </div>
+  {% endif %}
 </div>
 
 {% if run.status == 'running' %}
 <div hx-get="/htmx/projects/{{ project.slug }}/runs/{{ run.id }}/progress" hx-trigger="load, every 3s" hx-swap="innerHTML">
   <div class="card"><p class="text-muted">Chargement de la progression...</p></div>
+</div>
+{% endif %}
+
+{% if execution and execution.phases and run.status != 'running' %}
+<div class="card mb-2">
+  <h3>Details d'execution</h3>
+  <table>
+    <thead>
+      <tr>
+        <th></th>
+        <th>Phase</th>
+        <th>Duree</th>
+        <th>Detail</th>
+        <th style="text-align: right;">Tokens</th>
+        <th style="text-align: right;">Cout</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for phase in execution.phases %}
+      <tr style="{% if phase.status == 'failed' %}color: var(--critical);{% elif phase.status == 'pending' %}color: var(--text-muted);{% endif %}">
+        <td style="width: 24px; text-align: center;">
+          {% if phase.status == 'completed' %}
+            <span style="color: var(--good);">&#10003;</span>
+          {% elif phase.status == 'failed' %}
+            <span style="color: var(--critical);">&#10007;</span>
+          {% else %}
+            <span style="color: var(--text-muted);">&#9675;</span>
+          {% endif %}
+        </td>
+        <td>{{ phase.label }}</td>
+        <td class="mono text-sm">
+          {% if phase.duration %}
+            {% if phase.duration >= 60 %}{{ (phase.duration // 60) | int }}m{{ "%02d" | format((phase.duration % 60) | int) }}s{% else %}{{ "%.1f" | format(phase.duration) }}s{% endif %}
+          {% else %}-{% endif %}
+        </td>
+        <td class="text-sm text-muted">{{ phase.detail or '-' }}</td>
+        <td class="mono text-sm" style="text-align: right;">
+          {% if phase.tokens %}{{ "{:,}".format(phase.tokens) }}{% else %}-{% endif %}
+        </td>
+        <td class="mono text-sm" style="text-align: right;">
+          {% if phase.cost %}~${{ "%.3f" | format(phase.cost) }}{% else %}-{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="font-weight: 600; border-top: 2px solid var(--border);">
+        <td></td>
+        <td>Total</td>
+        <td class="mono text-sm">
+          {% if run.duration %}
+            {% if run.duration >= 60 %}{{ (run.duration // 60) | int }}m{{ "%02d" | format((run.duration % 60) | int) }}s{% else %}{{ "%.1f" | format(run.duration) }}s{% endif %}
+          {% elif execution.elapsed %}
+            {% if execution.elapsed >= 60 %}{{ (execution.elapsed // 60) | int }}m{{ "%02d" | format((execution.elapsed % 60) | int) }}s{% else %}{{ "%.0f" | format(execution.elapsed) }}s{% endif %}
+          {% endif %}
+        </td>
+        <td></td>
+        <td class="mono text-sm" style="text-align: right;">
+          {% if execution.total_tokens %}{{ "{:,}".format(execution.total_tokens) }}{% endif %}
+        </td>
+        <td class="mono text-sm" style="text-align: right;">
+          {% if execution.total_cost %}~${{ "%.3f" | format(execution.total_cost) }}{% endif %}
+        </td>
+      </tr>
+    </tfoot>
+  </table>
 </div>
 {% endif %}
 

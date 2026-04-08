@@ -12,6 +12,9 @@ from figma_audit.utils.claude_client import ClaudeClient
 
 console = Console()
 
+# Exposed after run() for cost tracking by callers
+_last_client: ClaudeClient | None = None
+
 # Framework detection markers
 FRAMEWORK_MARKERS = {
     "flutter": ["pubspec.yaml"],
@@ -297,6 +300,7 @@ def run(config: Config) -> Path:
     console.print(f"  Prompt size: {len(user_prompt):,} chars")
     console.print("[bold]Sending to Claude for analysis...[/bold]")
 
+    global _last_client
     client = ClaudeClient(api_key=config.anthropic_api_key)
     manifest_data = client.analyze(
         system_prompt=SYSTEM_PROMPT,
@@ -304,6 +308,7 @@ def run(config: Config) -> Path:
         max_tokens=16384,
         phase="analyze",
     )
+    _last_client = client
     client.print_usage()
 
     # ── Step 5: Save manifest ──────────────────────────────────────

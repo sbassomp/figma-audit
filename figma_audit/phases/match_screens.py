@@ -13,6 +13,9 @@ from figma_audit.utils.claude_client import ClaudeClient
 
 console = Console()
 
+# Exposed after run() for cost tracking by callers
+_last_client: ClaudeClient | None = None
+
 # Max images per vision API call (to stay within limits)
 VISION_BATCH_SIZE = 9
 
@@ -20,18 +23,33 @@ SYSTEM_PROMPT = """\
 You are a UI/UX expert matching Figma design screens to application routes.
 
 You will receive:
-1. A list of application routes with descriptions and metadata
+1. A list of application routes with descriptions, metadata, and context
 2. Figma screen images with their names
 
 Your task: for each Figma screen, find the best matching route from the application.
 
+IMPORTANT - Comprendre les ecrans pre/post-login:
+- Les pages marquees "publique" (auth_required: false) sont des ecrans \
+visibles AVANT la connexion (splash, login, inscription, onboarding).
+- Les pages marquees "auth requise" ne sont visibles qu'APRES connexion.
+- Un ecran Figma de type splash/onboarding/welcome doit correspondre a une \
+route publique, PAS a une route authentifiee montrant des donnees.
+- Si un ecran Figma montre clairement un contenu de type liste/dashboard/donnees, \
+il correspond a une route authentifiee, pas au splash.
+
+IMPORTANT - Ecrans a plusieurs etats:
+- Un meme ecran Figma peut correspondre a un ETAT SPECIFIQUE d'une page \
+(ex: "Courses Dark Mode" = etat dark de la page courses).
+- Precise dans les notes quel etat de la page correspond a l'ecran Figma.
+
 Rules:
-- Match based on visual content, screen name, and route description
+- Match based on visual content, screen name, route description, AND page context \
+(form fields, required state, auth requirement)
 - Some Figma screens may not have a matching route (old designs, variants, components)
 - Some routes may match multiple Figma screens (different states of the same page)
 - Set confidence: 0.9+ = very certain, 0.7-0.9 = likely, 0.5-0.7 = uncertain, <0.5 = guess
 - Set route to null if no good match exists
-- Write notes in French explaining the match rationale
+- Write notes in French explaining the match rationale, including which visual state matches
 - Output ONLY valid JSON, no markdown, no commentary
 
 JSON Schema:
@@ -51,21 +69,52 @@ JSON Schema:
 
 
 def _build_routes_description(pages_manifest: dict) -> str:
-    """Build a text description of all routes from the pages manifest."""
+    """Build a rich text description of all routes from the pages manifest."""
     lines = ["## Routes de l'application\n"]
     for page in pages_manifest.get("pages", []):
-        auth = "auth requise" if page.get("auth_required") else "publique"
+        auth_required = page.get("auth_required", False)
+        if auth_required:
+            auth = "auth requise — visible apres connexion"
+        else:
+            auth = "publique — visible AVANT login"
+
+        desc = page.get("description", "")
         fields = page.get("form_fields", [])
         states = page.get("interactive_states", [])
-        desc = page.get("description", "")
+        params = page.get("params", [])
+        req_state = page.get("required_state", {})
 
         lines.append(f"- **{page['route']}** (id: `{page['id']}`, {auth})")
         lines.append(f"  Description: {desc}")
+
+        if req_state:
+            state_desc = req_state.get("description", "")
+            deps = req_state.get("data_dependencies", [])
+            if state_desc:
+                lines.append(f"  Prerequis: {state_desc}")
+            if deps:
+                lines.append(f"  Donnees requises: {', '.join(deps)}")
+
         if fields:
-            field_names = [f["name"] for f in fields]
-            lines.append(f"  Champs: {', '.join(field_names)}")
+            field_descs = [
+                f"{f['name']} ({f.get('type', '?')})"
+                + (f" etape {f['step']}" if f.get("step") else "")
+                for f in fields
+            ]
+            lines.append(f"  Champs de formulaire: {', '.join(field_descs)}")
+
+        if params:
+            param_descs = [
+                f":{p['name']} ({p.get('type', 'string')}"
+                + (", optionnel" if p.get("optional") else "")
+                + ")"
+                for p in params
+            ]
+            lines.append(f"  Parametres URL: {', '.join(param_descs)}")
+
         if states:
-            lines.append(f"  États: {', '.join(states)}")
+            lines.append(f"  Etats visuels: {', '.join(states)}")
+
         lines.append("")
 
     return "\n".join(lines)
@@ -124,6 +173,7 @@ def run(config: Config) -> Path:
     console.print(f"  With images: {len(screens_with_images)}")
     console.print(f"  Name-only:   {len(screens_without_images)}")
 
+    global _last_client
     client = ClaudeClient(api_key=config.anthropic_api_key)
     all_mappings: list[dict] = []
 
@@ -197,6 +247,7 @@ def run(config: Config) -> Path:
         )
         all_mappings.extend(result.get("mappings", []))
 
+    _last_client = client
     client.print_usage()
 
     # ── Build YAML output ──────────────────────────────────────────
