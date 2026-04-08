@@ -24,8 +24,14 @@
   </div>
   <div class="stat-card">
     <div class="stat-value">{{ stats.total_discrepancies }}</div>
-    <div class="stat-label">Ecarts total</div>
+    <div class="stat-label">Ecarts actifs</div>
   </div>
+  {% if stats.n_dismissed %}
+  <div class="stat-card">
+    <div class="stat-value" style="color: var(--text-muted);">{{ stats.n_dismissed }}</div>
+    <div class="stat-label">Ignores</div>
+  </div>
+  {% endif %}
   <div class="stat-card stat-critical">
     <div class="stat-value">{{ stats.by_severity.critical or 0 }}</div>
     <div class="stat-label">Critical</div>
@@ -156,9 +162,9 @@
       <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?status={{ filter_status or '' }}" class="btn btn-sm {% if not filter_severity %}btn-primary{% endif %}">Toutes severites</a>
       <span style="border-left: 1px solid var(--border); margin: 0 0.25rem;"></span>
       <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=open" class="btn btn-sm {% if filter_status == 'open' %}btn-primary{% endif %}">Open</a>
-      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=ignored" class="btn btn-sm {% if filter_status == 'ignored' %}btn-primary{% endif %}">Ignored</a>
       <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=fixed" class="btn btn-sm {% if filter_status == 'fixed' %}btn-primary{% endif %}">Fixed</a>
-      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}" class="btn btn-sm {% if not filter_status %}btn-primary{% endif %}">Tous statuts</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=ignored" class="btn btn-sm {% if filter_status == 'ignored' %}btn-primary{% endif %}">Ignores/Won't fix</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}" class="btn btn-sm {% if not filter_status %}btn-primary{% endif %}">Actifs</a>
     </div>
   </div>
 

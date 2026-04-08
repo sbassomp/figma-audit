@@ -898,8 +898,14 @@ def run_detail(
     query = select(Discrepancy).where(Discrepancy.run_id == run_id)
     if severity:
         query = query.where(Discrepancy.severity == severity)
-    if status:
+    if status == "ignored":
+        # Show both ignored and wontfix together
+        query = query.where(Discrepancy.status.in_(["ignored", "wontfix"]))  # type: ignore[union-attr]
+    elif status:
         query = query.where(Discrepancy.status == status)
+    else:
+        # By default, hide dismissed (ignored/wontfix) — show only actionable
+        query = query.where(Discrepancy.status.not_in(["ignored", "wontfix"]))  # type: ignore[union-attr]
     query = query.order_by(Discrepancy.severity, Discrepancy.category)
     discrepancies = session.exec(query).all()
 
@@ -910,7 +916,12 @@ def run_detail(
     by_severity = {"critical": 0, "important": 0, "minor": 0}
     by_category: dict[str, int] = {}
     all_discs = session.exec(select(Discrepancy).where(Discrepancy.run_id == run_id)).all()
+    dismissed_statuses = {"ignored", "wontfix"}
+    n_dismissed = 0
     for d in all_discs:
+        if d.status in dismissed_statuses:
+            n_dismissed += 1
+            continue
         by_severity[d.severity] = by_severity.get(d.severity, 0) + 1
         by_category[d.category] = by_category.get(d.category, 0) + 1
 
@@ -981,7 +992,8 @@ def run_detail(
             "filter_status": status,
             "comparisons_list": comparisons_list,
             "stats": {
-                "total_discrepancies": len(all_discs),
+                "total_discrepancies": len(all_discs) - n_dismissed,
+                "n_dismissed": n_dismissed,
                 "total_captures": len(captures),
                 "by_severity": by_severity,
                 "by_category": by_category,
