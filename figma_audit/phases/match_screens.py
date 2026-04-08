@@ -40,7 +40,11 @@ il correspond a une route authentifiee, pas au splash.
 IMPORTANT - Ecrans a plusieurs etats:
 - Un meme ecran Figma peut correspondre a un ETAT SPECIFIQUE d'une page \
 (ex: "Courses Dark Mode" = etat dark de la page courses).
-- Precise dans les notes quel etat de la page correspond a l'ecran Figma.
+- Si une page a des "etats capturables" (capturable_states), identifie a quel \
+etat specifique correspond chaque ecran Figma et renseigne le champ state_id \
+avec l'identifiant exact (ex: "step_2_addresses"). \
+Si l'ecran correspond a l'etat initial (premiere etape), met state_id au premier etat capturable. \
+Si aucun etat capturable ne correspond, met state_id a null.
 
 Rules:
 - Match based on visual content, screen name, route description, AND page context \
@@ -60,6 +64,7 @@ JSON Schema:
       "figma_screen_name": "Screen Name",
       "route": "/path or null",
       "page_id": "page_id or null",
+      "state_id": "capturable_state_id or null",
       "confidence": 0.95,
       "notes": "Raison du matching en français"
     }
@@ -114,6 +119,13 @@ def _build_routes_description(pages_manifest: dict) -> str:
 
         if states:
             lines.append(f"  Etats visuels: {', '.join(states)}")
+
+        capturable = page.get("capturable_states", [])
+        if capturable:
+            cap_descs = [
+                f"{cs['state_id']}: {cs.get('description', '')}" for cs in capturable
+            ]
+            lines.append(f"  Etats capturables (dans l'ordre): {'; '.join(cap_descs)}")
 
         lines.append("")
 

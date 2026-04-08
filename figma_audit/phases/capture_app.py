@@ -405,15 +405,49 @@ async def _capture_route(
         "styles_available": styles is not None,
     }
 
-    # Capture interactive states if defined
-    interactive_states = page_info.get("interactive_states", [])
-    state_screenshots = []
-    for state in interactive_states[1:]:  # Skip first state (already captured)
-        # We can only capture additional states if we have navigation steps for them
-        # For now, just note them
-        state_screenshots.append({"state": state, "screenshot": None})
+    # Capture additional states (wizard steps, tabs) if defined
+    capturable_states = page_info.get("capturable_states", [])
+    if capturable_states:
+        state_screenshots = []
 
-    if state_screenshots:
+        # First capturable state = the screenshot we already took
+        first = capturable_states[0]
+        state_screenshots.append({
+            "state_id": first["state_id"],
+            "screenshot": f"app_screenshots/{slug}.png",
+        })
+
+        # Subsequent states: execute delta_steps → screenshot
+        for state_idx, state in enumerate(capturable_states[1:], start=2):
+            state_id = state["state_id"]
+            delta_steps = state.get("delta_steps", [])
+            state_slug = f"{slug}--{_slugify(state_id)}"
+            state_screenshot_rel = f"app_screenshots/{state_slug}.png"
+            state_screenshot_path = screenshots_dir / f"{state_slug}.png"
+
+            console.print(
+                f"    State {state_idx}/{len(capturable_states)}: {state_id}..."
+            )
+
+            try:
+                for step in delta_steps:
+                    await _execute_navigation_step(page, step, test_data)
+                await page.wait_for_timeout(1000)
+                await page.screenshot(
+                    path=str(state_screenshot_path), full_page=False
+                )
+                state_screenshots.append({
+                    "state_id": state_id,
+                    "screenshot": state_screenshot_rel,
+                })
+            except Exception as e:
+                console.print(f"    [yellow]State {state_id} failed: {e}[/yellow]")
+                state_screenshots.append({
+                    "state_id": state_id,
+                    "screenshot": None,
+                    "error": str(e)[:200],
+                })
+
         result["states"] = state_screenshots
 
     return result, styles

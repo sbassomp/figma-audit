@@ -107,6 +107,7 @@ def _build_comparison_context(
     app_styles: dict | None,
     page_id: str,
     page_info: dict | None = None,
+    state_id: str | None = None,
 ) -> str:
     """Build text context for the vision comparison.
 
@@ -124,7 +125,10 @@ def _build_comparison_context(
 
     # Page context from manifest (description, auth, form fields, etc.)
     if page_info:
-        parts.append(f"\n## Page de l'application: {page_id} ({page_info.get('route', '?')})")
+        header = f"\n## Page de l'application: {page_id} ({page_info.get('route', '?')})"
+        if state_id:
+            header += f" — etat: {state_id}"
+        parts.append(header)
         desc = page_info.get("description", "")
         if desc:
             parts.append(f"Description: {desc}")
@@ -236,7 +240,21 @@ def run(config: Config) -> Path:
     # Build lookups
     pages_by_id = {p["id"]: p for p in pages_manifest.get("pages", [])}
     figma_screens_by_id = {s["id"]: s for s in figma_manifest.get("screens", [])}
-    captures_by_page_id = {c["page_id"]: c for c in captures if c.get("screenshot")}
+    # Build capture lookup: (page_id, state_id) → capture dict with screenshot
+    captures_by_key: dict[tuple[str, str | None], dict] = {}
+    for c in captures:
+        pid = c.get("page_id")
+        if not pid:
+            continue
+        if c.get("screenshot"):
+            captures_by_key[(pid, None)] = c
+        for state in c.get("states", []):
+            if state.get("screenshot"):
+                captures_by_key[(pid, state["state_id"])] = {
+                    **c,
+                    "screenshot": state["screenshot"],
+                    "state_id": state["state_id"],
+                }
 
     # Load obsolete screen IDs from DB (if available)
     obsolete_screen_ids: set[str] = set()
@@ -266,6 +284,7 @@ def run(config: Config) -> Path:
     for m in mapping_data.get("mappings", []):
         figma_id = m.get("figma_screen_id")
         page_id = m.get("page_id")
+        state_id = m.get("state_id")  # may be None for single-state pages
         route = m.get("route")
         confidence = m.get("confidence", 0)
 
@@ -277,9 +296,14 @@ def run(config: Config) -> Path:
             continue
 
         figma_screen = figma_screens_by_id.get(figma_id)
-        capture = captures_by_page_id.get(page_id)
+        if not figma_screen:
+            continue
 
-        if not figma_screen or not capture:
+        # Try state-specific capture first, fall back to base capture
+        capture = captures_by_key.get((page_id, state_id))
+        if not capture and state_id:
+            capture = captures_by_key.get((page_id, None))
+        if not capture:
             continue
 
         figma_img = figma_screen.get("image_path")
@@ -299,6 +323,7 @@ def run(config: Config) -> Path:
                 "figma_screen_id": figma_id,
                 "figma_screen_name": figma_screen.get("name", ""),
                 "page_id": page_id,
+                "state_id": state_id,
                 "route": route,
                 "figma_image": figma_img,
                 "app_image": app_img,
@@ -306,11 +331,11 @@ def run(config: Config) -> Path:
             }
         )
 
-    # Deduplicate: keep only the highest-confidence mapping per (figma_screen, page_id)
+    # Deduplicate: keep only the highest-confidence mapping per (figma_screen, page_id, state_id)
     seen = set()
     unique_pairs = []
     for p in pairs:
-        key = (p["figma_screen_id"], p["page_id"])
+        key = (p["figma_screen_id"], p["page_id"], p.get("state_id"))
         if key not in seen:
             seen.add(key)
             unique_pairs.append(p)
@@ -375,6 +400,7 @@ def run(config: Config) -> Path:
             app_styles,
             pair["page_id"],
             page_info=pages_by_id.get(pair["page_id"]),
+            state_id=pair.get("state_id"),
         )
 
         user_prompt = (

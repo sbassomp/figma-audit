@@ -184,6 +184,17 @@ each page from the app root.
 - For form_fields: list all user-input fields visible on the page.
 - For interactive_states: list distinct visual states \
 (loading, empty, populated, error, wizard steps).
+- For capturable_states: list ONLY the visual states that can be reached \
+sequentially via Playwright browser automation (wizard steps, tab switches). \
+Exclude transient states (loading, error, success). \
+Each state's delta_steps are INCREMENTAL actions from the PREVIOUS state (not cumulative). \
+The first state's delta_steps is empty (page already loaded after navigation_steps). \
+States MUST be ordered in the sequence they can be reached. \
+Omit capturable_states for pages with only one visual state. \
+For wizards: each step is a capturable_state. \
+For pages with tabs: each tab is a capturable_state. \
+Use text-based selectors (e.g. {"action": "click", "text": "Suivant"}) rather than \
+CSS selectors when possible, as Flutter CanvasKit apps may not have DOM elements.
 - For auth_required: check if the route is behind an auth guard/redirect.
 - For test_data: suggest realistic test values for forms \
 (French context: phone +33..., French addresses).
@@ -214,7 +225,17 @@ JSON Schema to follow:
         {"name": "string", "type": "text|tel|email|address|datetime|select|checkbox|number", \
 "step?": "number"}
       ],
-      "interactive_states": ["string"]
+      "interactive_states": ["string"],
+      "capturable_states": [
+        {
+          "state_id": "string (snake_case, matches an interactive_states entry)",
+          "description": "string (what is visible in this state, in French)",
+          "delta_steps": [
+            {"action": "navigate|click|fill|wait|wait_for_url", "url?": "string", \
+"selector?": "string", "text?": "string", "value?": "string", "timeout?": "number"}
+          ]
+        }
+      ]
     }
   ],
   "design_tokens": {
