@@ -96,6 +96,10 @@
     </div>
     {% endif %}
   </div>
+
+  {% if run_finished %}
+  <script>setTimeout(function(){ window.location.reload(); }, 1500);</script>
+  {% endif %}
 </div>
 
 <style>

@@ -195,7 +195,7 @@ def run_progress(
             polling=True,
         )
 
-    # Run is not active -- show final state (or progress from last save)
+    # Run is not active -- show final state and trigger page reload
     if run.progress_json:
         data = json.loads(run.progress_json)
         return tmpl.render(
@@ -208,6 +208,7 @@ def run_progress(
             elapsed=data.get("elapsed"),
             run_error=run.error,
             polling=False,
+            run_finished=run.status in ("completed", "failed"),
         )
 
     # No progress data at all -- show generic checklist
