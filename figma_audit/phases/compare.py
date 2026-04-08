@@ -57,15 +57,39 @@ Compare element by element on these criteria:
 9. DONNEES_ABSENTES: the app shows an empty/initial state (empty list, "no data" placeholder) \
 while the Figma shows a populated state with data. This is NOT a design gap but a content gap.
 
-IMPORTANT - Distinguish design gaps from data gaps:
-- If the app displays an empty state (empty list, placeholder like \
-"aucun element", "aucune course") while the Figma shows populated data: \
-classify as DONNEES_ABSENTES with severity "minor".
-  Still compare the structure, colors and layout of the empty state itself.
-- NEVER mark as "critical" an element that is missing only because there is no data \
-(course cards, activity lines, transaction rows, etc.)
-- Only mark as "critical" elements that are structurally missing regardless of data state \
-(missing navigation bar, wrong component type, missing buttons that should always be visible)
+IMPORTANT - Distinguish DESIGN gaps from DATA gaps:
+Les donnees dynamiques (noms, adresses, dates, heures, prix, distances, durees, \
+numeros de telephone, emails, photos de profil) sont TOUJOURS differentes entre \
+le Figma (mockup) et l'app (donnees reelles). Ne JAMAIS les signaler comme ecarts. \
+Ignore completement toute difference qui porte sur le CONTENU des donnees.
+Concentre-toi uniquement sur :
+- La STRUCTURE (est-ce que les bons composants sont presents ?)
+- Le STYLE (couleurs de fond, couleurs de texte, tailles, polices, border-radius)
+- Les ICONES (meme icone ? meme couleur ? meme taille ?)
+- Le POSITIONNEMENT (alignement, espacement, placement des badges/indicateurs)
+- Les ETATS VISUELS (badge actif/inactif, couleur d'un label selon le contexte)
+
+Exemples de choses a NE PAS signaler :
+- Prix different (170€ vs 79€) → donnee dynamique
+- Adresse differente → donnee dynamique
+- Date/heure differente → donnee dynamique
+- Nom de patient different → donnee dynamique
+- Distance/duree differente → donnee dynamique
+- Numero de version de l'app → ignore
+
+Exemples de choses a SIGNALER :
+- Couleur de fond d'un badge differente (bleu vs vert)
+- Couleur de texte d'un label differente (noir vs blanc)
+- Icone differente dans la navigation bar
+- Position d'une pastille de notification decalee
+- Border-radius different sur un bouton
+- Taille ou poids de police different
+
+IMPORTANT - Sois MINUTIEUX sur les details visuels :
+- Compare la couleur de FOND et la couleur de TEXTE de chaque badge/label separement
+- Compare chaque icone de la navigation bar individuellement
+- Verifie le positionnement exact des pastilles de notification (badges numeriques)
+- Compare les variantes de style (filled vs outlined, round vs square)
 
 For each discrepancy found:
 - category: one of the 8 above
