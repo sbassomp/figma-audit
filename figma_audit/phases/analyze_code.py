@@ -220,13 +220,14 @@ Rules:
 - Temperature 0: be precise and factual, only include what the code explicitly shows.
 - For navigation_steps: describe the Playwright actions needed to reach \
 each page from the app root. \
-For pages that require dynamic IDs (e.g. /items/:id), use ${test_data.key} templates \
-in URLs (e.g. {"action": "navigate", "url": "/items/${test_data.item_id}"}). \
-The test_data object will contain IDs created during test setup. \
-Use descriptive key names matching the domain model \
-(e.g. item_id, order_id, user_id, product_available_id, product_sold_id). \
-For capturable_states that depend on data state (e.g. detail page "available" vs "sold"), \
-use different test_data keys in the delta_steps navigation URL for each state.
+For pages that require a specific item/entity (e.g. /items/:id), \
+DO NOT navigate directly to the URL with an ID — the app may use encrypted/hashed IDs. \
+Instead, navigate via the UI: go to the list page, then click on an item to reach the detail. \
+Example: [{"action": "navigate", "url": "/"}, {"action": "click", "text": "some item text"}, \
+{"action": "wait", "timeout": 2000}]. \
+This is more robust and works regardless of ID format. \
+For capturable_states that depend on data state (e.g. detail page "available" vs "taken"), \
+describe how to reach each state via UI interactions.
 - For form_fields: list all user-input fields visible on the page.
 - For interactive_states: list distinct visual states \
 (loading, empty, populated, error, wizard steps).
