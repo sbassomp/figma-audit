@@ -489,6 +489,28 @@ async def _capture_route(
     screenshot_path = screenshots_dir / f"{slug}.png"
     await page.screenshot(path=str(screenshot_path), full_page=False)
 
+    # Detect redirect to home: if the screenshot is identical to the home page,
+    # the navigation likely failed silently (app redirected)
+    import hashlib
+
+    current_hash = hashlib.md5(screenshot_path.read_bytes()).hexdigest()
+    home_screenshot = screenshots_dir / "courses-list.png"
+    if not home_screenshot.exists():
+        home_screenshot = screenshots_dir / "home.png"
+    if home_screenshot.exists() and screenshot_path != home_screenshot:
+        home_hash = hashlib.md5(home_screenshot.read_bytes()).hexdigest()
+        if current_hash == home_hash:
+            console.print(
+                f"    [yellow]WARNING: {page_id} screenshot identical to home page "
+                f"— navigation likely failed (redirect)[/yellow]"
+            )
+            return {
+                "page_id": page_id,
+                "route": route,
+                "screenshot": None,
+                "error": "Navigation failed: redirected to home page",
+            }, None
+
     # Extract styles
     styles = await _extract_computed_styles(page)
 
