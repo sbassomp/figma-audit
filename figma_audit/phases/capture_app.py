@@ -32,29 +32,85 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
 
     elif action == "click":
         selector = step.get("selector", "")
-        try:
-            await page.click(selector, timeout=timeout)
-        except Exception as e:
-            # Fallback: try text-based selector
-            text = step.get("text", "")
-            if text:
-                await page.get_by_text(text).click(timeout=timeout)
-            else:
-                console.print(f"    [dim]Click failed on {selector}: {e}[/dim]")
+        text = step.get("text", "")
+        x, y = step.get("x"), step.get("y")
+        clicked = False
+
+        # Strategy 1: CSS selector (works for DOM-based apps)
+        if selector and not clicked:
+            try:
+                await page.click(selector, timeout=min(timeout, 3000))
+                clicked = True
+            except Exception:
+                pass
+
+        # Strategy 2: Accessibility role (works for Flutter CanvasKit with Semantics)
+        if text and not clicked:
+            for role in ("button", "link", "tab", "menuitem"):
+                try:
+                    await page.get_by_role(role, name=text).click(timeout=min(timeout, 3000))
+                    clicked = True
+                    break
+                except Exception:
+                    pass
+
+        # Strategy 3: Text-based (works for HTML renderer)
+        if text and not clicked:
+            try:
+                await page.get_by_text(text, exact=False).first.click(timeout=min(timeout, 3000))
+                clicked = True
+            except Exception:
+                pass
+
+        # Strategy 4: Coordinate-based (last resort)
+        if x is not None and y is not None and not clicked:
+            try:
+                await page.mouse.click(x, y)
+                clicked = True
+            except Exception:
+                pass
+
+        if not clicked:
+            console.print(
+                f"    [dim]Click failed: selector={selector} text={text} x={x} y={y}[/dim]"
+            )
 
     elif action == "fill":
         selector = step.get("selector", "")
+        label = step.get("label", "")
         value = step.get("value", "")
         # Resolve ${test_data.key} templates
         if "${" in value:
             value = _resolve_template(value, test_data)
-        try:
-            await page.fill(selector, value, timeout=timeout)
-        except Exception as e:
+        filled = False
+
+        # Strategy 1: CSS selector
+        if selector and not filled:
             try:
-                await page.locator(selector).fill(value, timeout=timeout)
+                await page.fill(selector, value, timeout=min(timeout, 3000))
+                filled = True
             except Exception:
-                console.print(f"    [dim]Fill failed on {selector}: {e}[/dim]")
+                pass
+
+        # Strategy 2: Accessibility label (works for Flutter CanvasKit)
+        if label and not filled:
+            try:
+                await page.get_by_label(label).fill(value, timeout=min(timeout, 3000))
+                filled = True
+            except Exception:
+                pass
+
+        # Strategy 3: Placeholder text
+        placeholder = step.get("placeholder", "")
+        if placeholder and not filled:
+            try:
+                await page.get_by_placeholder(placeholder).fill(value, timeout=min(timeout, 3000))
+                filled = True
+            except Exception:
+                pass
+
+        if not filled:
+            console.print(f"    [dim]Fill failed: selector={selector} label={label}[/dim]")
 
     elif action == "wait":
         selector = step.get("selector")

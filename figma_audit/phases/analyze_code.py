@@ -238,10 +238,17 @@ Each state's delta_steps are INCREMENTAL actions from the PREVIOUS state (not cu
 The first state's delta_steps is empty (page already loaded after navigation_steps). \
 States MUST be ordered in the sequence they can be reached. \
 Omit capturable_states for pages with only one visual state. \
-For wizards: each step is a capturable_state. \
+For wizards: EVERY step must be a capturable_state (not just 2). If a wizard has 5 steps, \
+generate 5 capturable_states. \
 For pages with tabs: each tab is a capturable_state. \
-Use text-based selectors (e.g. {"action": "click", "text": "Suivant"}) rather than \
-CSS selectors when possible, as Flutter CanvasKit apps may not have DOM elements.
+For registration flows with multiple pages: each page is on a separate route, \
+but generate capturable_states for sub-steps within each page (e.g. form empty vs filled). \
+IMPORTANT for delta_steps actions: the app may use Flutter CanvasKit which has NO DOM elements. \
+Use {"action": "click", "text": "Button Label"} — the automation will try \
+accessibility roles (button, link, tab) first, then text match, then coordinates. \
+For form fields, use {"action": "fill", "label": "Field Label", "value": "..."} \
+which uses accessibility labels. \
+Never rely on CSS selectors for Flutter CanvasKit apps.
 - For auth_required: check if the route is behind an auth guard/redirect.
 - For test_data: suggest realistic test values for forms \
 (French context: phone +33..., French addresses).
