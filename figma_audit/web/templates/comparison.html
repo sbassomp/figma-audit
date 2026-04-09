@@ -7,10 +7,15 @@
     <div>
       <h2>{{ screen.name }}</h2>
       <p class="subtitle">
-        {{ capture.route }}
+        <span class="mono">{{ capture.route }}</span>
         <span class="fidelity-badge fidelity-{{ fidelity }}">{{ fidelity }}</span>
         <span class="text-muted">- {{ discrepancies | length }} ecart(s)</span>
       </p>
+      {% if capture.landed_url %}
+      <p class="text-xs text-muted mono" style="margin-top: 0.25rem; word-break: break-all;">
+        URL testee : <a href="{{ capture.landed_url }}" target="_blank" rel="noopener" style="color: var(--text-muted);">{{ capture.landed_url }}</a>
+      </p>
+      {% endif %}
     </div>
     <a href="/projects/{{ project.slug }}/runs/{{ run_id }}" class="btn">Retour au run</a>
   </div>

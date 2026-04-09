@@ -289,6 +289,7 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
                 run_id=run.id,
                 page_id=c["page_id"],
                 route=c["route"],
+                landed_url=c.get("landed_url"),
                 screenshot_path=c.get("screenshot"),
                 styles_available=c.get("styles_available", False),
                 error=c.get("error"),

@@ -140,13 +140,16 @@
   </p>
   <table>
     <thead>
-      <tr><th>Page ID</th><th>Route</th><th>Cause</th></tr>
+      <tr><th>Page ID</th><th>Route</th><th>URL testee</th><th>Cause</th></tr>
     </thead>
     <tbody>
       {% for fc in failed_captures %}
       <tr>
         <td class="mono text-sm">{{ fc.page_id }}</td>
         <td class="mono text-sm text-muted">{{ fc.route }}</td>
+        <td class="mono text-xs text-muted" style="word-break: break-all; max-width: 320px;">
+          {{ fc.landed_url or '-' }}
+        </td>
         <td class="text-sm" style="color: #f59e0b;">
           {% if fc.is_duplicate %}
             <strong>Redirection silencieuse</strong> &mdash; {{ fc.error }}

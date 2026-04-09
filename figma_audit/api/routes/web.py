@@ -1053,6 +1053,7 @@ def run_detail(
                 {
                     "page_id": c.page_id,
                     "route": c.route,
+                    "landed_url": c.landed_url,
                     "error": c.error or "",
                     "is_duplicate": c in captures_dup,
                 }
@@ -1107,7 +1108,7 @@ def comparison_view(
         capture = type(
             "FakeCapture",
             (),
-            {"page_id": page_id, "route": "", "screenshot_path": None},
+            {"page_id": page_id, "route": "", "landed_url": None, "screenshot_path": None},
         )()
 
     return templates.TemplateResponse(

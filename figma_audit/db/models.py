@@ -64,6 +64,7 @@ class Capture(SQLModel, table=True):
     run_id: int = Field(foreign_key="run.id", index=True)
     page_id: str
     route: str
+    landed_url: str | None = None  # Final URL after navigation (with params resolved)
     screenshot_path: str | None = None
     styles_available: bool = False
     error: str | None = None

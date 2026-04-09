@@ -30,7 +30,9 @@ def get_engine(db_path: str | None = None):
 
 
 def init_db(db_path: str | None = None) -> None:
-    """Create all tables if they don't exist."""
+    """Create all tables if they don't exist, then apply lightweight migrations."""
+    from sqlalchemy import text
+
     from figma_audit.db.models import (  # noqa: F401 — ensure models are registered
         Annotation,
         Capture,
@@ -42,6 +44,19 @@ def init_db(db_path: str | None = None) -> None:
 
     engine = get_engine(db_path)
     SQLModel.metadata.create_all(engine)
+
+    # Lightweight schema migrations: add new columns to existing tables.
+    # SQLite ALTER TABLE ADD COLUMN is idempotent-via-catch: if the column
+    # already exists, it raises and we swallow the error.
+    migrations = [
+        ("capture", "landed_url", "VARCHAR"),
+    ]
+    with engine.begin() as conn:
+        for table, column, col_type in migrations:
+            try:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+            except Exception:
+                pass  # Column already exists
 
 
 def get_session(db_path: str | None = None) -> Generator[Session, None, None]:
