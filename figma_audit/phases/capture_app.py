@@ -489,27 +489,11 @@ async def _capture_route(
     screenshot_path = screenshots_dir / f"{slug}.png"
     await page.screenshot(path=str(screenshot_path), full_page=False)
 
-    # Detect redirect to home: if the screenshot is identical to the home page,
-    # the navigation likely failed silently (app redirected)
-    import hashlib
-
-    current_hash = hashlib.md5(screenshot_path.read_bytes()).hexdigest()
-    home_screenshot = screenshots_dir / "courses-list.png"
-    if not home_screenshot.exists():
-        home_screenshot = screenshots_dir / "home.png"
-    if home_screenshot.exists() and screenshot_path != home_screenshot:
-        home_hash = hashlib.md5(home_screenshot.read_bytes()).hexdigest()
-        if current_hash == home_hash:
-            console.print(
-                f"    [yellow]WARNING: {page_id} screenshot identical to home page "
-                f"— navigation likely failed (redirect)[/yellow]"
-            )
-            return {
-                "page_id": page_id,
-                "route": route,
-                "screenshot": None,
-                "error": "Navigation failed: redirected to home page",
-            }, None
+    # Note: silent-redirect detection is handled globally after all captures
+    # finish, via _dedupe_captures() which hashes every screenshot (including
+    # wizard states) and flags any hash shared by 2+ captures as a navigation
+    # failure. Doing it post-capture avoids the order-dependency of comparing
+    # against a single reference image that may not exist yet.
 
     # Extract styles
     styles = await _extract_computed_styles(page)
@@ -567,6 +551,102 @@ async def _capture_route(
         result["states"] = state_screenshots
 
     return result, styles
+
+
+def _dedupe_captures(
+    all_results: list[dict], screenshots_dir: Path
+) -> tuple[int, int]:
+    """Global silent-redirect detection.
+
+    Hashes every screenshot file (top-level captures + wizard states) and flags
+    silent navigation failures as follows:
+
+    For each unique hash that appears in 2+ locations, we keep the capture
+    whose ROUTE is shortest (and which is a top-level capture, not a wizard
+    state) and mark every other occurrence as a navigation failure. The
+    rationale: when multiple pages produce identical screenshots, the app
+    silently redirected the deeper/more-specific routes to a shallower
+    landing page (home, list, account menu, splash). The shortest route is
+    the most plausible "legitimate" owner of that landing screen.
+
+    Mutates ``all_results`` in place. Failed captures get ``screenshot=None``
+    and ``error="Duplicate of <kept_page_id>'s screenshot — navigation
+    likely failed"``. Wizard states that fall through to the same image as
+    a sibling state (or another page) are flagged similarly.
+
+    Returns ``(failed_captures, failed_states)`` counts.
+    """
+    import hashlib
+
+    # Walk all captures, collecting (result_idx, state_idx_or_None, rel_path,
+    # route_len, is_top_level) for every screenshot.
+    locations: list[tuple[int, int | None, str, int, bool]] = []
+    for i, result in enumerate(all_results):
+        route = result.get("route") or ""
+        route_len = len(route)
+        top_path = result.get("screenshot")
+        if top_path:
+            locations.append((i, None, top_path, route_len, True))
+        for s_idx, state in enumerate(result.get("states", []) or []):
+            sp = state.get("screenshot")
+            if sp:
+                # Wizard states get a length penalty so they never beat their
+                # parent route on equal length.
+                locations.append((i, s_idx, sp, route_len + 100, False))
+
+    # Hash every screenshot file once (cache by path).
+    path_hash: dict[str, str] = {}
+    for _, _, rel_path, _, _ in locations:
+        if rel_path in path_hash:
+            continue
+        abs_path = screenshots_dir.parent / rel_path
+        if not abs_path.exists():
+            continue
+        try:
+            path_hash[rel_path] = hashlib.md5(abs_path.read_bytes()).hexdigest()
+        except OSError:
+            continue
+
+    # Group locations by hash; for each hash, the location with the shortest
+    # route is the "winner" and everything else is flagged.
+    hash_to_locs: dict[str, list[tuple[int, int | None, str, int, bool]]] = {}
+    for loc in locations:
+        h = path_hash.get(loc[2])
+        if h is None:
+            continue
+        hash_to_locs.setdefault(h, []).append(loc)
+
+    failed_captures = 0
+    failed_states = 0
+    for h, locs in hash_to_locs.items():
+        if len(locs) < 2:
+            continue
+        # Winner: shortest route, top-level beats state on tie (already
+        # encoded in the +100 penalty applied to states).
+        winner = min(locs, key=lambda loc: (loc[3], loc[2]))
+        winner_page_id = all_results[winner[0]].get("page_id", "?")
+
+        for loc in locs:
+            if loc is winner:
+                continue
+            result_idx, state_idx, _rel_path, _, _ = loc
+            result = all_results[result_idx]
+            err_msg = (
+                f"Duplicate screenshot of '{winner_page_id}' — "
+                "navigation likely failed (silent redirect)"
+            )
+            if state_idx is None:
+                result["screenshot"] = None
+                result["error"] = err_msg
+                result["duplicate_hash"] = h
+                failed_captures += 1
+            else:
+                state = result["states"][state_idx]
+                state["screenshot"] = None
+                state["error"] = err_msg
+                failed_states += 1
+
+    return failed_captures, failed_states
 
 
 async def _run_async(config: Config) -> Path:
@@ -738,6 +818,10 @@ async def _run_async(config: Config) -> Path:
         cleanup_creds = seed_account if seed_account else test_data
         _cleanup_test_data(app_url, cleanup_creds, test_setup, created_item_ids)
 
+    # Global post-capture dedup: detect silent redirects by hashing every
+    # screenshot and flagging any hash shared by 2+ captures.
+    failed_captures, failed_states = _dedupe_captures(all_results, screenshots_dir)
+
     # Save results
     captures_path = output_dir / "app_captures.json"
     with open(captures_path, "w") as f:
@@ -751,9 +835,14 @@ async def _run_async(config: Config) -> Path:
     errors = sum(1 for r in all_results if r.get("error"))
 
     console.print("\n[bold green]Capture done.[/bold green]")
-    console.print(f"  {captured} screenshots saved to {screenshots_dir}")
+    console.print(f"  {captured}/{len(all_results)} screenshots saved to {screenshots_dir}")
     if all_styles:
         console.print(f"  {len(all_styles)} pages with DOM styles extracted")
+    if failed_captures or failed_states:
+        console.print(
+            f"  [yellow]{failed_captures} page(s) and {failed_states} wizard state(s) "
+            f"flagged as silent redirects (duplicate screenshots)[/yellow]"
+        )
     if errors:
         console.print(f"  [yellow]{errors} pages with errors[/yellow]")
 
