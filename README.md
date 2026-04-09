@@ -1,19 +1,19 @@
 # figma-audit
 
-Outil CLI + dashboard web pour la **comparaison semantique** entre des designs Figma et une application web deployee.
+CLI tool + web dashboard for **semantic comparison** between Figma designs and a deployed web application.
 
-Contrairement aux outils de visual regression (BackstopJS, Percy, Chromatic) qui comparent deux versions de la meme app entre elles, figma-audit compare un **design Figma** contre son **implementation reelle** et produit un rapport detaille des ecarts.
+Unlike visual regression tools (BackstopJS, Percy, Chromatic) that compare two versions of the same app against each other, figma-audit compares a **Figma design** against its **actual implementation** and produces a detailed discrepancy report.
 
-## Fonctionnalites
+## Features
 
-- **Analyse du code source** : detection automatique du framework (Flutter, React, Vue, Angular, Next.js), extraction des routes, pages et design tokens via Claude AI
-- **Export Figma** : telechargement de l'arbre complet du fichier Figma, extraction des ecrans, tokens de design et elements via l'API REST, avec cache local et gestion du rate limiting
-- **Matching intelligent** : association automatique des ecrans Figma aux routes de l'application par vision AI (Claude Vision)
-- **Capture de l'application** : navigation automatisee avec Playwright, authentification Flutter CanvasKit, creation de donnees de test via API
-- **Comparaison hybride** : analyse programmatique (couleurs deltaE CIE2000, typographie, spacing) + analyse semantique par vision AI
-- **Rapport HTML autonome** : fichier HTML standalone avec images embarquees, dark theme, side-by-side interactif
-- **Dashboard web** : interface htmx avec suivi des projets, historique des runs, galerie d'ecrans, gestion des ecarts (ignorer, corriger, annoter)
-- **Service daemon** : installation en tant que service systemd (Linux) ou launchd (macOS) pour un dashboard permanent
+- **Source code analysis**: automatic framework detection (Flutter, React, Vue, Angular, Next.js), extraction of routes, pages and design tokens via Claude AI
+- **Figma export**: full Figma file tree download, screen extraction, design tokens and elements via REST API, with local cache and rate limiting management
+- **Intelligent matching**: automatic association of Figma screens to application routes using vision AI (Claude Vision)
+- **Application capture**: automated navigation with Playwright, Flutter CanvasKit authentication, test data creation via API
+- **Hybrid comparison**: programmatic analysis (deltaE CIE2000 colors, typography, spacing) + semantic analysis via vision AI
+- **Standalone HTML report**: self-contained HTML file with embedded images, dark theme, interactive side-by-side
+- **Web dashboard**: htmx interface with project tracking, run history, screen gallery, discrepancy management (ignore, fix, annotate)
+- **Daemon service**: installation as a systemd (Linux) or launchd (macOS) service for a permanent dashboard
 
 ## Installation
 
@@ -22,24 +22,24 @@ pip install -e .
 figma-audit setup
 ```
 
-La commande `setup` guide l'installation pas a pas :
-1. Configuration des cles API (Anthropic, Figma)
-2. Initialisation de la base de donnees SQLite
-3. Installation du navigateur Chromium (Playwright)
-4. Installation optionnelle du daemon systeme
+The `setup` command guides you through the installation step by step:
+1. API key configuration (Anthropic, Figma)
+2. SQLite database initialization
+3. Chromium browser installation (Playwright)
+4. Optional system daemon installation
 
-### Pre-requis
+### Prerequisites
 
 - Python 3.11+
-- Un compte [Anthropic](https://console.anthropic.com/) avec une cle API
-- Un token [Figma Personal Access](https://www.figma.com/developers/api#access-tokens)
-- `pdftoppm` (paquet `poppler-utils`) pour l'import de screens depuis un export Figma Desktop
+- An [Anthropic](https://console.anthropic.com/) account with an API key
+- A [Figma Personal Access](https://www.figma.com/developers/api#access-tokens) token
+- `pdftoppm` (`poppler-utils` package) for importing screens from a Figma Desktop export
 
-## Demarrage rapide
+## Quick start
 
-### 1. Configuration du projet
+### 1. Project configuration
 
-Creer un fichier `figma-audit.yaml` a la racine du projet :
+Create a `figma-audit.yaml` file at the project root:
 
 ```yaml
 project: ~/dev/mon-projet
@@ -52,195 +52,195 @@ viewport:
   height: 844
   device_scale_factor: 1
 
-# Compte secondaire pour creer des donnees de test (optionnel)
+# Secondary account for creating test data (optional)
 seed_account:
   email: "test@example.com"
   otp: "1234"
 ```
 
-Les cles API sont chargees automatiquement depuis `~/.config/figma-audit/env` (cree par `figma-audit setup`).
+API keys are automatically loaded from `~/.config/figma-audit/env` (created by `figma-audit setup`).
 
-### 2. Lancer un audit complet
+### 2. Run a full audit
 
 ```bash
 figma-audit run
 ```
 
-Le pipeline execute les 6 phases et affiche la progression :
+The pipeline executes the 6 phases and displays progress:
 
 ```
 [1/6] Analyze code
   12.3s  35 pages  ~$0.167
 [2/6] Export Figma
-  0.2s  77 ecrans
+  0.2s  77 screens
 [3/6] Match screens
   45.2s  70 matches  ~$0.187
 [4/6] Capture app
   92.1s  19 pages
-[5/6] Compare (estimation: ~279,100 tokens, ~$1.38)
-  8m12s  673 ecarts  ~$1.426
+[5/6] Compare (estimate: ~279,100 tokens, ~$1.38)
+  8m12s  673 discrepancies  ~$1.426
 [6/6] Report
   3.1s  32.4 MB
 
-Recap du run
+Run summary
   Total: 10m44s | 282,700 tokens | ~$1.78
 ```
 
-Le rapport est genere dans `output/report.html`.
+The report is generated in `output/report.html`.
 
-### 3. Ouvrir le dashboard
+### 3. Open the dashboard
 
 ```bash
 figma-audit serve
 ```
 
-Ouvrir http://localhost:8321 dans un navigateur.
+Open http://localhost:8321 in a browser.
 
-## Commandes CLI
+## CLI commands
 
 ### Pipeline
 
-| Commande | Description |
-|----------|-------------|
-| `figma-audit run` | Execute le pipeline complet (6 phases) |
-| `figma-audit run --from compare` | Reprend depuis une phase (analyze, figma, match, capture, compare, report) |
-| `figma-audit setup` | Configuration interactive (cles, DB, navigateur, daemon) |
-| `figma-audit serve` | Demarre le dashboard web sur le port 8321 |
+| Command | Description |
+|---------|-------------|
+| `figma-audit run` | Execute the full pipeline (6 phases) |
+| `figma-audit run --from compare` | Resume from a phase (analyze, figma, match, capture, compare, report) |
+| `figma-audit setup` | Interactive configuration (keys, DB, browser, daemon) |
+| `figma-audit serve` | Start the web dashboard on port 8321 |
 
-### Phases individuelles
+### Individual phases
 
-Chaque phase peut etre executee independamment. Les phases lisent et ecrivent dans le repertoire `--output` (defaut: `./audit-results` ou la valeur du YAML).
+Each phase can be executed independently. Phases read from and write to the `--output` directory (default: `./audit-results` or the YAML value).
 
-| Commande | Phase | Entree | Sortie |
-|----------|-------|--------|--------|
-| `figma-audit analyze -p ~/dev/projet` | 1 | Code source | `pages_manifest.json` |
-| `figma-audit figma` | 2 | URL Figma + token | `figma_manifest.json` + PNGs |
-| `figma-audit match` | 3 | Manifests phases 1+2 | `screen_mapping.yaml` |
-| `figma-audit capture --app-url https://...` | 4 | Mapping + manifest | Screenshots app |
+| Command | Phase | Input | Output |
+|---------|-------|-------|--------|
+| `figma-audit analyze -p ~/dev/project` | 1 | Source code | `pages_manifest.json` |
+| `figma-audit figma` | 2 | Figma URL + token | `figma_manifest.json` + PNGs |
+| `figma-audit match` | 3 | Phase 1+2 manifests | `screen_mapping.yaml` |
+| `figma-audit capture --app-url https://...` | 4 | Mapping + manifest | App screenshots |
 | `figma-audit compare` | 5 | Screenshots + manifests | `discrepancies.json` |
 | `figma-audit report` | 6 | Discrepancies | `report.html` |
 
-### Utilitaires
+### Utilities
 
-| Commande | Description |
-|----------|-------------|
-| `figma-audit import-screens export.zip` | Importe des ecrans depuis un export Figma Desktop (ZIP avec PDFs) |
+| Command | Description |
+|---------|-------------|
+| `figma-audit import-screens export.zip` | Import screens from a Figma Desktop export (ZIP with PDFs) |
 
-### Options de la phase Figma
+### Figma phase options
 
 ```bash
-figma-audit figma --offline          # Travaille uniquement depuis le cache local
-figma-audit figma --force-refresh    # Force le re-telechargement depuis l'API
-figma-audit figma --target-page "45:927"  # Limite a une page Figma specifique
+figma-audit figma --offline          # Work only from local cache
+figma-audit figma --force-refresh    # Force re-download from API
+figma-audit figma --target-page "45:927"  # Limit to a specific Figma page
 ```
 
-## Dashboard web
+## Web dashboard
 
-Le dashboard est accessible via `figma-audit serve` ou en installant le daemon avec `figma-audit setup`.
+The dashboard is accessible via `figma-audit serve` or by installing the daemon with `figma-audit setup`.
 
 ### Pages
 
-- **Dashboard** (`/`) : vue d'ensemble des projets avec statistiques globales
-- **Projet** (`/projects/{slug}`) : timeline des runs, statistiques, bouton pour lancer un nouveau run
-- **Galerie d'ecrans** (`/projects/{slug}/screens`) : tous les ecrans Figma avec vignettes, filtrage par statut (current/obsolete)
-- **Detail d'un run** (`/projects/{slug}/runs/{id}`) : statistiques, tableau des comparaisons par ecran, liste des ecarts avec filtres
-- **Comparaison** (`/projects/{slug}/runs/{id}/compare/{page_id}`) : side-by-side Figma vs Application avec liste des ecarts
+- **Dashboard** (`/`): project overview with global statistics
+- **Project** (`/projects/{slug}`): run timeline, statistics, button to launch a new run
+- **Screen gallery** (`/projects/{slug}/screens`): all Figma screens with thumbnails, filtering by status (current/obsolete)
+- **Run detail** (`/projects/{slug}/runs/{id}`): statistics, comparison table per screen, discrepancy list with filters
+- **Comparison** (`/projects/{slug}/runs/{id}/compare/{page_id}`): side-by-side Figma vs Application with discrepancy list
 
-### Actions interactives
+### Interactive actions
 
-Toutes les actions sont executees en place via htmx (pas de rechargement de page) :
+All actions are executed in-place via htmx (no page reload):
 
-- **Marquer un ecart** : Ignorer / Won't fix / Corrige
-- **Marquer un ecran** : Current / Obsolete
-- **Lancer un run** : depuis la page projet
-- **Filtrer les ecarts** : par severite (Critical / Important / Tous)
+- **Mark a discrepancy**: Ignore / Won't fix / Fixed
+- **Mark a screen**: Current / Obsolete
+- **Launch a run**: from the project page
+- **Filter discrepancies**: by severity (Critical / Important / All)
 
-### API REST
+### REST API
 
-La documentation complete de l'API est disponible a `http://localhost:8321/docs` (OpenAPI auto-generee).
+Full API documentation is available at `http://localhost:8321/docs` (auto-generated OpenAPI).
 
-Principaux endpoints :
+Main endpoints:
 
 ```
-GET    /api/projects                              # Liste des projets
-POST   /api/projects                              # Creer un projet
-GET    /api/projects/{slug}/runs                   # Historique des runs
-POST   /api/projects/{slug}/runs                   # Lancer un run
-GET    /api/projects/{slug}/screens                # Ecrans Figma
-PATCH  /api/projects/{slug}/discrepancies/{id}     # Modifier le statut d'un ecart
-POST   /api/projects/{slug}/discrepancies/{id}/annotate  # Annoter un ecart
+GET    /api/projects                              # List projects
+POST   /api/projects                              # Create a project
+GET    /api/projects/{slug}/runs                   # Run history
+POST   /api/projects/{slug}/runs                   # Launch a run
+GET    /api/projects/{slug}/screens                # Figma screens
+PATCH  /api/projects/{slug}/discrepancies/{id}     # Update discrepancy status
+POST   /api/projects/{slug}/discrepancies/{id}/annotate  # Annotate a discrepancy
 ```
 
-## Structure du projet
+## Project structure
 
 ```
 figma_audit/
   __main__.py          # CLI (Click)
-  config.py            # Configuration Pydantic + chargement YAML
-  models.py            # Modeles de donnees (FigmaScreen, FigmaManifest, etc.)
+  config.py            # Pydantic configuration + YAML loading
+  models.py            # Data models (FigmaScreen, FigmaManifest, etc.)
   phases/
-    analyze_code.py    # Phase 1 : analyse du code source via Claude
-    export_figma.py    # Phase 2 : export Figma via API REST
-    match_screens.py   # Phase 3 : matching Figma/routes via Claude Vision
-    capture_app.py     # Phase 4 : capture Playwright + seeding API
-    compare.py         # Phase 5 : comparaison hybride
-    report.py          # Phase 6 : generation du rapport HTML
+    analyze_code.py    # Phase 1: source code analysis via Claude
+    export_figma.py    # Phase 2: Figma export via REST API
+    match_screens.py   # Phase 3: Figma/routes matching via Claude Vision
+    capture_app.py     # Phase 4: Playwright capture + API seeding
+    compare.py         # Phase 5: hybrid comparison
+    report.py          # Phase 6: HTML report generation
   utils/
-    claude_client.py   # Client Claude API avec tracking tokens/cout
-    figma_client.py    # Client Figma REST avec rate limiting et cache
-    color.py           # Conversions couleur et deltaE CIE2000
-    progress.py        # Suivi de progression CLI et web
-    checks.py          # Verifications pre-execution
+    claude_client.py   # Claude API client with token/cost tracking
+    figma_client.py    # Figma REST client with rate limiting and cache
+    color.py           # Color conversions and deltaE CIE2000
+    progress.py        # CLI and web progress tracking
+    checks.py          # Pre-execution checks
   db/
-    models.py          # Tables SQLModel (Project, Run, Screen, etc.)
-    engine.py          # Engine SQLite et gestion des sessions
+    models.py          # SQLModel tables (Project, Run, Screen, etc.)
+    engine.py          # SQLite engine and session management
   api/
-    app.py             # Factory FastAPI
-    deps.py            # Injection de dependances
+    app.py             # FastAPI factory
+    deps.py            # Dependency injection
     routes/
-      projects.py      # CRUD projets
-      runs.py          # Gestion des runs
-      screens.py       # Gestion des ecrans
-      discrepancies.py # Gestion des ecarts
-      htmx.py          # Fragments HTML pour htmx
-      web.py           # Routes des pages web (Jinja2)
+      projects.py      # Projects CRUD
+      runs.py          # Run management
+      screens.py       # Screen management
+      discrepancies.py # Discrepancy management
+      htmx.py          # HTML fragments for htmx
+      web.py           # Web page routes (Jinja2)
   web/
     static/            # htmx.min.js + style.css (dark theme)
-    templates/         # Templates Jinja2 (dashboard, projet, run, etc.)
+    templates/         # Jinja2 templates (dashboard, project, run, etc.)
 ```
 
-## Fichiers intermediaires
+## Intermediate files
 
-Un run produit les fichiers suivants dans le repertoire de sortie :
+A run produces the following files in the output directory:
 
 ```
 output/
-  pages_manifest.json     # Phase 1 : routes, pages, design tokens
+  pages_manifest.json     # Phase 1: routes, pages, design tokens
   figma_raw/
-    file.json             # Arbre complet du fichier Figma (cache)
-    file_meta.json        # Metadonnees du cache
-  figma_manifest.json     # Phase 2 : ecrans, elements, tokens
-  figma_screens/*.png     # Phase 2 : screenshots des ecrans Figma
-  screen_mapping.yaml     # Phase 3 : mapping Figma <-> routes (editable)
-  app_screenshots/*.png   # Phase 4 : screenshots de l'application
-  app_captures.json       # Phase 4 : metadonnees des captures
-  discrepancies.json      # Phase 5 : ecarts detectes
-  report.html             # Phase 6 : rapport HTML autonome
+    file.json             # Full Figma file tree (cache)
+    file_meta.json        # Cache metadata
+  figma_manifest.json     # Phase 2: screens, elements, tokens
+  figma_screens/*.png     # Phase 2: Figma screen screenshots
+  screen_mapping.yaml     # Phase 3: Figma <-> routes mapping (editable)
+  app_screenshots/*.png   # Phase 4: application screenshots
+  app_captures.json       # Phase 4: capture metadata
+  discrepancies.json      # Phase 5: detected discrepancies
+  report.html             # Phase 6: standalone HTML report
 ```
 
-## Gestion des ecarts
+## Discrepancy management
 
-Chaque ecart detecte est classe par :
+Each detected discrepancy is classified by:
 
-- **Severite** : `critical` (trahit l'intention du designer), `important` (ecart visible), `minor` (nuance subtile)
-- **Categorie** : LAYOUT, COULEURS, TYPOGRAPHIE, COMPOSANTS, TEXTES, SPACING, ELEMENTS_MANQUANTS, ELEMENTS_AJOUTES, DONNEES_ABSENTES
-- **Statut** : `open`, `ignored`, `acknowledged`, `fixed`, `wontfix`
+- **Severity**: `critical` (betrays the designer's intent), `important` (visible discrepancy), `minor` (subtle nuance)
+- **Category**: LAYOUT, COLORS, TYPOGRAPHY, COMPONENTS, TEXT, SPACING, MISSING_ELEMENTS, ADDED_ELEMENTS, MISSING_DATA
+- **Status**: `open`, `ignored`, `acknowledged`, `fixed`, `wontfix`
 
-La categorie `DONNEES_ABSENTES` distingue les ecarts lies a un etat vide de l'application (pas de donnees de test) des vrais ecarts de design.
+The `MISSING_DATA` category distinguishes discrepancies related to an empty application state (no test data) from actual design discrepancies.
 
-## Configuration avancee
+## Advanced configuration
 
-### figma-audit.yaml complet
+### Full figma-audit.yaml
 
 ```yaml
 project: ~/dev/mon-projet
@@ -255,55 +255,195 @@ viewport:
 
 figma:
   cache_dir: figma_raw
-  request_delay: 3.0       # secondes entre chaque requete API
-  batch_size: 8             # ecrans par batch d'export
-  retry_wait_default: 60    # attente par defaut sur 429
+  request_delay: 3.0       # seconds between each API request
+  batch_size: 8             # screens per export batch
+  retry_wait_default: 60    # default wait on 429
   max_retries: 5
 
 thresholds:
-  color_delta_e: 5.0        # seuil deltaE pour "meme couleur"
-  font_size_tolerance: 2    # pixels de tolerance
-  spacing_tolerance: 4      # pixels de tolerance
+  color_delta_e: 5.0        # deltaE threshold for "same color"
+  font_size_tolerance: 2    # pixel tolerance
+  spacing_tolerance: 4      # pixel tolerance
 
 seed_account:
-  email: "test@example.com" # compte secondaire pour creer des donnees
+  email: "test@example.com" # secondary account for creating data
   otp: "1234"
 ```
 
-### Variables d'environnement
+### Environment variables
 
 | Variable | Description |
 |----------|-------------|
-| `ANTHROPIC_API_KEY` | Cle API Anthropic (requise) |
-| `FIGMA_TOKEN` | Token Figma Personal Access (requis pour Phase 2 en ligne) |
-| `FIGMA_URL` | URL du fichier Figma (alternative au YAML) |
-| `APP_URL` | URL de l'application (alternative au YAML) |
+| `ANTHROPIC_API_KEY` | Anthropic API key (required) |
+| `FIGMA_TOKEN` | Figma Personal Access token (required for online Phase 2) |
+| `FIGMA_URL` | Figma file URL (alternative to YAML) |
+| `APP_URL` | Application URL (alternative to YAML) |
 
-Les variables sont chargees automatiquement depuis `~/.config/figma-audit/env`.
+Variables are automatically loaded from `~/.config/figma-audit/env`.
 
-## Gestion du rate limiting Figma
+### Test setup configuration
 
-L'API Figma impose des limites strictes sur l'export d'images (~30 req/min, avec un cooldown pouvant atteindre 48h en cas de depassement). Strategies :
+For most pages, figma-audit just authenticates and navigates. But pages with path parameters (`/courses/:id`, `/invoices/:id`, `/profile/:userId`) cannot be reached without a valid entity ID, and pages whose state depends on backend data (a course in the "taken" state, a paid invoice, etc.) need that data to exist before the screenshot is taken. The `test_setup` block tells Phase 4 how to log in via the API and seed those entities so the tool can build real URLs and capture real content.
 
-1. **Cache local** : le tree du fichier Figma est telecharge une fois et cache dans `figma_raw/file.json` (69 MB pour un fichier de 77 ecrans). Les runs suivants utilisent le cache.
-2. **Mode offline** : `figma-audit figma --offline` travaille uniquement depuis le cache.
-3. **Import desktop** : exporter depuis Figma Desktop (File > Export) et importer avec `figma-audit import-screens export.zip`. Contourne completement le rate limit API.
+#### How `test_setup` is normally generated
 
-## Cout d'un audit
+Phase 1 reads the project's API client / repository / service files (`*_repository.dart`, `*Service.kt`, `services/api*.ts`, etc.) and asks Claude to infer the auth flow and the seed payload. The result lands in `output/pages_manifest.json` under `test_setup`. Most of the time it works on the first try.
 
-Le cout depend du nombre d'ecrans et du modele utilise (Sonnet 4.5 par defaut) :
+#### When Phase 1 gets it wrong
 
-| Phase | Appels API | Cout typique |
+The AI can hallucinate field names that look plausible but do not match the real DTO. Symptoms in the logs:
+
+```
+[4/6] Capture app
+  Setting up test data via API...
+    API login OK (seed)
+    Item 1 failed (400): {"type":"about:blank","title":"Validation Error",
+       "detail": "courseType: Course type is required, ..."}
+  0 test item(s) created
+```
+
+…followed in the run page by captures marked **`Unresolved placeholder: course_id not in test_data`**. This is the placeholder guard refusing to navigate to a nonsense URL like `/courses/placeholder_course_id`. It is the tool telling you the seed step did not produce a real ID.
+
+When that happens, override `test_setup` in your `figma-audit.yaml`. The YAML override fully replaces the manifest version — it is not merged, so write the whole block.
+
+#### Finding the right field names
+
+Open the request DTO of the endpoint you want to seed (in the project being audited, not in figma-audit). For Flutter / Dart this is typically a `freezed` class:
+
+```dart
+// lib/features/courses/data/models/course.dart
+class CreateCourseRequest with _$CreateCourseRequest {
+  const factory CreateCourseRequest({
+    required double departureLat,
+    required double departureLng,
+    required String departureAddress,
+    required double destinationLat,
+    required double destinationLng,
+    required String destinationAddress,
+    required DateTime desiredArrivalTime,   // must be in the future
+    required int waitingTimeMinutes,
+    required CourseType courseType,         // enum: TYPE_1, TYPE_2, ...
+    VehicleType? vehicleType,
+    String? comments,
+  }) = _CreateCourseRequest;
+}
+```
+
+For other stacks: look for `RequestBody` classes in Spring/Kotlin, Pydantic models in FastAPI, Zod schemas in tRPC, etc. The serialized field names (often controlled by `@JsonValue` / `@JsonProperty` / `alias`) are what you must use in `payload`, not the language-side property names.
+
+#### Full `test_setup` reference
+
+```yaml
+test_setup:
+  # API login flow used both for seed_items and for the main browser session.
+  auth_endpoint: /api/auth/login                # POST to verify credentials
+  auth_otp_request_endpoint: /api/auth/request-otp  # OPTIONAL: called first if the
+                                                    # backend uses passwordless OTP
+  auth_payload:                                 # Body sent to auth_endpoint.
+    phone: "${test_data.phone}"                 # ${test_data.X} is filled from the
+    code: "${test_data.otp}"                    # test_data dict at runtime.
+  auth_token_path: accessToken                  # Dotted path to the bearer token in
+                                                # the response (e.g. "data.token").
+
+  # Each entry creates one entity via API before the browser starts capturing.
+  # The returned ID is injected into test_data under test_data_key, so any
+  # ${test_data.<key>} placeholder in navigation_steps gets a real value.
+  seed_items:
+    - endpoint: /api/exchange/courses           # The path to call (with /api prefix
+                                                # if your backend uses one).
+      method: POST
+      payload:                                  # Must EXACTLY match the request DTO
+        departureLat: 48.8566                   # of your backend. Hard-coded values
+        departureLng: 2.3522                    # are fine for fixed fields.
+        departureAddress: "1 Rue de la Paix, 75001 Paris"
+        destinationLat: 48.8698
+        destinationLng: 2.3075
+        destinationAddress: "Hopital Saint-Louis, 75010 Paris"
+        desiredArrivalTime: "${now+1d}"         # Magic token: ISO-8601 UTC, 1 day
+                                                # in the future. See "Template tokens"
+                                                # below.
+        waitingTimeMinutes: 30
+        courseType: TYPE_1                      # Use the JSON value from the enum,
+        vehicleType: AMBULANCE                  # not the language-side name.
+      id_path: id                               # Where to find the ID in the
+                                                # response (dotted path: "data.id").
+      test_data_key: course_id                  # Key under which to store the ID
+                                                # so navigation_steps can use
+                                                # ${test_data.course_id}.
+
+  # OPTIONAL: transition the seeded item into a different state for pages that
+  # need a "taken / paid / archived" variant.
+  take_item:
+    endpoint: /api/exchange/courses/${course_id}/take
+    method: POST
+    test_data_key: course_taken_id
+
+  # OPTIONAL: cleanup endpoint called once captures are done. Without this,
+  # every run leaks a test entity into your backend.
+  cleanup_endpoint: /api/exchange/courses/${item_id}/archive
+```
+
+#### Template tokens
+
+Two kinds of `${...}` placeholders are supported in `payload`, `endpoint`, and navigation URLs:
+
+| Token | Resolves to | Use case |
+|-------|-------------|----------|
+| `${test_data.<key>}` | The string value at `test_data[<key>]` | Inject seeded IDs, credentials, etc. |
+| `${<key>}` | Same as above (the `test_data.` prefix is optional) | Shorter form |
+| `${now}` | ISO-8601 UTC timestamp at substitution time | Creation timestamps |
+| `${now+1d}` | Now + 1 day | Future-dated fields like `desiredArrivalTime` |
+| `${now-30m}` | Now - 30 minutes | Backdating |
+| `${now+2h}` | Now + 2 hours | Short-term scheduling |
+
+Suffixes for `${now±N<unit>}`: `s` seconds, `m` minutes, `h` hours, `d` days.
+
+Hard-coding a date (`"2025-01-15T14:00:00Z"`) is the most common cause of intermittent test_setup failures — it works for a while, then the date drifts into the past and the backend starts rejecting it. Always use `${now+1d}` (or longer) for future-required fields.
+
+#### Two test accounts: `test_credentials` vs `seed_account`
+
+```yaml
+test_credentials:                    # The MAIN user the browser logs in as.
+  email: "tester@example.com"        # This is who sees the captured screens.
+  otp: "1234"
+
+seed_account:                        # A SECOND user used only by _setup_test_data
+  email: "seeder@example.com"        # to create entities. Required when items
+  otp: "1234"                        # created by user X are visible to user Y as
+                                     # "available" — typical for marketplace apps.
+```
+
+If your app does not have this depositor/consumer split, omit `seed_account` and the seed step will use `test_credentials`.
+
+#### The placeholder guard
+
+If after `_setup_test_data` runs, any `test_data` value still contains a marker like `placeholder_*`, `todo_*`, `<TODO>`, `<REPLACE>`, or `xxxxxx`, the tool purges it and prints a warning. Any subsequent capture whose URL would have used that key fails with a clear `Unresolved placeholder: ...` error instead of silently navigating to a garbage URL. You will see those failures in the run page's **Navigation failures** card with the exact unresolved template.
+
+This is by design: **the tool refuses to lie about what it captured**. If you see a placeholder error, fix the matching `seed_items` entry — do not chase the symptom in the comparison view.
+
+## Figma rate limiting management
+
+The Figma API enforces strict limits on image exports (~30 req/min, with a cooldown that can reach 48h if exceeded). Strategies:
+
+1. **Local cache**: the Figma file tree is downloaded once and cached in `figma_raw/file.json` (69 MB for a 77-screen file). Subsequent runs use the cache.
+2. **Offline mode**: `figma-audit figma --offline` works only from the cache.
+3. **Desktop import**: export from Figma Desktop (File > Export) and import with `figma-audit import-screens export.zip`. Completely bypasses the API rate limit.
+
+## Audit cost
+
+The cost depends on the number of screens and the model used (Sonnet 4.5 by default):
+
+| Phase | API calls | Typical cost |
 |-------|-----------|--------------|
 | Analyze (35 pages) | 1 | ~$0.17 |
-| Match (70 ecrans) | 9 | ~$0.19 |
-| Compare (62 paires) | 62 | ~$1.43 |
-| Report (resume) | 1 | ~$0.01 |
+| Match (70 screens) | 9 | ~$0.19 |
+| Compare (62 pairs) | 62 | ~$1.43 |
+| Report (summary) | 1 | ~$0.01 |
 | **Total** | **73** | **~$1.80** |
 
-Le cout est affiche en temps reel pendant l'execution et dans le recap final.
+The cost is displayed in real-time during execution and in the final summary.
 
-## Developpement
+## Development
 
 ```bash
 git clone <your-repo-url>/figma-audit.git
@@ -321,6 +461,6 @@ ruff check figma_audit/
 ruff format figma_audit/
 ```
 
-## Licence
+## License
 
 MIT
