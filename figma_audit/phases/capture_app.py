@@ -165,17 +165,65 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
         pass  # Handled by the caller
 
 
-def _resolve_template(template: str, data: dict) -> str:
-    """Resolve ${key} templates in a string."""
-    import re as _re
+_DURATION_PATTERN = re.compile(r"^now(?:([+-])(\d+)([smhd]))?$")
 
-    def _replace(m: _re.Match) -> str:
-        key = m.group(1)
+
+def _resolve_now_token(expr: str) -> str | None:
+    """Resolve a `now` / `now+1d` / `now-30m` token to an ISO-8601 UTC timestamp.
+
+    Used inside ${...} placeholders so test_setup payloads can specify dates
+    relative to capture time. The Phase 1 AI keeps emitting hard-coded dates
+    that go stale (e.g. desiredArrivalTime: 2025-01-15) and get rejected by
+    backends that require future timestamps.
+
+    Supported suffixes: s (seconds), m (minutes), h (hours), d (days).
+    Returns None if the expression is not a now-token.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    m = _DURATION_PATTERN.match(expr.strip())
+    if not m:
+        return None
+    sign, amount, unit = m.groups()
+    delta = timedelta()
+    if sign:
+        n = int(amount)
+        delta = {
+            "s": timedelta(seconds=n),
+            "m": timedelta(minutes=n),
+            "h": timedelta(hours=n),
+            "d": timedelta(days=n),
+        }[unit]
+        if sign == "-":
+            delta = -delta
+    return (datetime.now(timezone.utc) + delta).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _resolve_template(template: str, data: dict) -> str:
+    """Resolve ${key} templates in a string.
+
+    Two kinds of placeholders are supported:
+    - ``${test_data.key}`` or ``${key}`` — looked up in the test_data dict.
+      Returns the original ``${...}`` literal if the key is missing, so
+      _assert_url_resolved can detect and reject the leftover.
+    - ``${now}``, ``${now+1d}``, ``${now-30m}`` — magic time tokens that
+      resolve to an ISO-8601 UTC timestamp at substitution time. Lets
+      test_setup payloads always send a future date for fields like
+      desiredArrivalTime without hard-coding values that expire.
+    """
+
+    def _replace(m: re.Match) -> str:
+        key = m.group(1).strip()
+        # Magic now-token
+        now_value = _resolve_now_token(key)
+        if now_value is not None:
+            return now_value
+        # test_data lookup
         if key.startswith("test_data."):
             key = key[len("test_data."):]
         return str(data.get(key, m.group(0)))
 
-    return _re.sub(r"\$\{([^}]+)\}", _replace, template)
+    return re.sub(r"\$\{([^}]+)\}", _replace, template)
 
 
 def _resolve_payload(payload: dict, data: dict) -> dict:
