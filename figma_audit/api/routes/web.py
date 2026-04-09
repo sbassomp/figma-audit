@@ -945,6 +945,12 @@ def run_detail(
 
     captures = session.exec(select(Capture).where(Capture.run_id == run_id)).all()
 
+    # Capture success/failure breakdown — surfaces silent navigation failures
+    # detected by Phase 4's global dedup pass.
+    captures_ok = [c for c in captures if c.screenshot_path and not c.error]
+    captures_failed = [c for c in captures if c.error]
+    captures_dup = [c for c in captures_failed if c.error and "Duplicate" in c.error]
+
     by_severity = {"critical": 0, "important": 0, "minor": 0}
     by_category: dict[str, int] = {}
     all_discs = session.exec(select(Discrepancy).where(Discrepancy.run_id == run_id)).all()
@@ -1037,9 +1043,21 @@ def run_detail(
                 "total_discrepancies": len(all_discs) - n_dismissed,
                 "n_dismissed": n_dismissed,
                 "total_captures": len(captures),
+                "captures_ok": len(captures_ok),
+                "captures_failed": len(captures_failed),
+                "captures_duplicate": len(captures_dup),
                 "by_severity": by_severity,
                 "by_category": by_category,
             },
+            "failed_captures": [
+                {
+                    "page_id": c.page_id,
+                    "route": c.route,
+                    "error": c.error or "",
+                    "is_duplicate": c in captures_dup,
+                }
+                for c in captures_failed
+            ],
         },
     )
 

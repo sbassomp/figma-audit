@@ -18,10 +18,16 @@
 {% endif %}
 
 <div class="stats-grid">
-  <div class="stat-card">
-    <div class="stat-value">{{ stats.total_captures }}</div>
-    <div class="stat-label">Pages capturees</div>
+  <div class="stat-card{% if stats.captures_failed %} stat-warning{% endif %}">
+    <div class="stat-value">{{ stats.captures_ok }}<span class="text-sm text-muted">/{{ stats.total_captures }}</span></div>
+    <div class="stat-label">Captures OK</div>
   </div>
+  {% if stats.captures_failed %}
+  <div class="stat-card stat-warning">
+    <div class="stat-value" style="color: #f59e0b;">{{ stats.captures_failed }}</div>
+    <div class="stat-label">Echecs nav.</div>
+  </div>
+  {% endif %}
   <div class="stat-card">
     <div class="stat-value">{{ stats.total_discrepancies }}</div>
     <div class="stat-label">Ecarts actifs</div>
@@ -120,6 +126,37 @@
         </td>
       </tr>
     </tfoot>
+  </table>
+</div>
+{% endif %}
+
+{% if failed_captures %}
+<div class="card mb-2" style="border-color: #f59e0b;">
+  <h3 style="color: #f59e0b;">Echecs de navigation ({{ failed_captures | length }})</h3>
+  <p class="text-sm text-muted" style="margin-bottom: 0.75rem;">
+    Ces pages n'ont pas pu etre capturees correctement. Les screenshots etaient identiques
+    a ceux d'autres pages (redirection silencieuse vers login/home/splash) ou la navigation a leve une erreur.
+    Phase 5 ne les compare pas — les ecrans Figma associes resteront sans verification.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Page ID</th><th>Route</th><th>Cause</th></tr>
+    </thead>
+    <tbody>
+      {% for fc in failed_captures %}
+      <tr>
+        <td class="mono text-sm">{{ fc.page_id }}</td>
+        <td class="mono text-sm text-muted">{{ fc.route }}</td>
+        <td class="text-sm" style="color: #f59e0b;">
+          {% if fc.is_duplicate %}
+            <strong>Redirection silencieuse</strong> &mdash; {{ fc.error }}
+          {% else %}
+            {{ fc.error }}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
   </table>
 </div>
 {% endif %}

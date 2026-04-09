@@ -129,6 +129,8 @@ body {
 .stat-important .stat-value { color: var(--important); }
 .stat-minor .stat-value { color: var(--minor); }
 .stat-good .stat-value { color: var(--good); }
+.stat-warning .stat-value { color: #f59e0b; }
+.stat-warning { border-color: #f59e0b; }
 
 /* Badges */
 .badge {
