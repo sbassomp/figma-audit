@@ -16,6 +16,42 @@ from figma_audit.config import Config
 console = Console()
 
 
+class UnresolvedPlaceholderError(Exception):
+    """Raised when a navigation URL still contains placeholder or unresolved
+    template values after substitution.
+
+    This guards against the Phase 1 AI emitting test_data entries like
+    `course_id: "placeholder_course_id"` that silently leak into URLs when
+    seed_items fails, producing nonsense requests (e.g. GET /courses/placeholder_course_id)
+    that confuse the user into thinking the captured page is real."""
+
+
+_PLACEHOLDER_MARKERS = ("placeholder", "todo_", "<TODO", "<REPLACE", "xxxxxx")
+
+
+def _assert_url_resolved(url: str) -> None:
+    """Fail loudly if the URL still carries unresolved markers.
+
+    Detects:
+    - Leftover `${...}` template braces (key not found in test_data)
+    - Common placeholder tokens ("placeholder_xxx", "todo_xxx", "<TODO>", etc.)
+    A matched URL is never navigated to — the caller will mark the capture
+    as a navigation failure with a clear error.
+    """
+    if "${" in url:
+        raise UnresolvedPlaceholderError(
+            f"URL has unresolved template: {url} "
+            "(a ${{...}} key was not found in test_data; check test_setup.seed_items)"
+        )
+    lower = url.lower()
+    for marker in _PLACEHOLDER_MARKERS:
+        if marker in lower:
+            raise UnresolvedPlaceholderError(
+                f"URL contains placeholder marker '{marker}': {url} "
+                "(seed_items likely failed — navigation would hit a nonsense route)"
+            )
+
+
 async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> None:
     """Execute a single navigation step from the manifest."""
     action = step.get("action", "")
@@ -26,6 +62,8 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
         # Resolve ${test_data.key} templates in URLs
         if "${" in url:
             url = _resolve_template(url, test_data)
+        # Guard against placeholder leakage — see UnresolvedPlaceholderError
+        _assert_url_resolved(url)
         if url.startswith("/"):
             url = page.url.split("/")[0] + "//" + page.url.split("/")[2] + url
         await page.goto(url, wait_until="networkidle", timeout=timeout)
@@ -524,20 +562,43 @@ async def _capture_route(
     console.print(f"  Capturing {page_id} ({route})...")
 
     # Navigate
+    placeholder_error: str | None = None
     nav_steps = page_info.get("navigation_steps", [])
     if nav_steps:
         for step in nav_steps:
             try:
                 await _execute_navigation_step(page, step, test_data)
+            except UnresolvedPlaceholderError as e:
+                # Unresolved placeholder is a hard failure for this capture —
+                # we must not pretend it succeeded. Abort the nav sequence
+                # and mark the capture as errored with the specific reason.
+                placeholder_error = str(e)
+                console.print(f"    [red]{placeholder_error}[/red]")
+                break
             except Exception as e:
                 console.print(f"    [yellow]Nav step failed: {step.get('action')} -- {e}[/yellow]")
     else:
         # Simple direct navigation
         url = app_url.rstrip("/") + route
         try:
+            _assert_url_resolved(url)
             await page.goto(url, wait_until="networkidle", timeout=15000)
+        except UnresolvedPlaceholderError as e:
+            placeholder_error = str(e)
+            console.print(f"    [red]{placeholder_error}[/red]")
         except Exception as e:
             console.print(f"    [yellow]Navigation failed: {e}[/yellow]")
+
+    if placeholder_error:
+        # Short-circuit: return a failed capture so Phase 5 skips it and the
+        # run page surfaces the reason. No screenshot is taken.
+        return {
+            "page_id": page_id,
+            "route": route,
+            "landed_url": page.url,
+            "screenshot": None,
+            "error": f"Unresolved placeholder: {placeholder_error}",
+        }, None
 
     # Wait a bit for rendering to settle
     await page.wait_for_timeout(1000)
@@ -781,6 +842,27 @@ async def _run_async(config: Config) -> Path:
         )
     # Note: _setup_test_data injects IDs directly into test_data
     # using the test_data_key from each seed_item spec in the manifest
+
+    # Purge any placeholder values still lingering in test_data. If seed_items
+    # failed (bad payload, auth issue, etc.) the AI-generated placeholder
+    # strings like "placeholder_course_id" would otherwise leak into every
+    # templated URL, producing silent nonsense navigation. Removing them
+    # forces _assert_url_resolved to fail loudly on each affected capture.
+    leaked_placeholders = []
+    for k, v in list(test_data.items()):
+        if isinstance(v, str) and any(
+            marker in v.lower() for marker in _PLACEHOLDER_MARKERS
+        ):
+            leaked_placeholders.append((k, v))
+            del test_data[k]
+    if leaked_placeholders:
+        console.print(
+            f"  [yellow]Warning: {len(leaked_placeholders)} unresolved "
+            "placeholder(s) in test_data — captures needing these values "
+            "will fail with a clear error:[/yellow]"
+        )
+        for k, v in leaked_placeholders:
+            console.print(f"    [yellow]  {k} = {v!r}[/yellow]")
 
     # Launch browser
     async with async_playwright() as pw:
