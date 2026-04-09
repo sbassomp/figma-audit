@@ -547,7 +547,7 @@ async def _capture_route(
     await page.screenshot(path=str(screenshot_path), full_page=False)
 
     # Capture the final landed URL. When the route has path params, this
-    # shows the substituted value (e.g. /courses/42 instead of /courses/:id).
+    # shows the substituted value (e.g. /items/42 instead of /items/:id).
     # When the app redirected us (auth guard, 404 fallback), this surfaces
     # the actual destination so the user can diagnose silent redirects.
     final_url = page.url

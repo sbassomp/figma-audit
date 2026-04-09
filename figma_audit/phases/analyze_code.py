@@ -234,20 +234,21 @@ are unreliable. Prefer a single `navigate` step to the full route whenever possi
 \
 Rules for picking navigation style: \
 \
-(1) Route has NO path parameters (e.g. /my-courses, /account, /courses/ambulance/new, \
-/documents, /profile/edit): generate EXACTLY ONE step: \
-`[{"action": "navigate", "url": "/my-courses"}]`. \
-Do NOT click tabs, do NOT click menu items, do NOT go via the list page. The app \
+(1) Route has NO path parameters: generate EXACTLY ONE step: \
+`[{"action": "navigate", "url": "<the_route>"}]`. \
+Do NOT click tabs, do NOT click menu items, do NOT go via a list page. The app \
 router resolves the deep link directly. \
 \
-(2) Route has ONE OR MORE path parameters (e.g. /courses/:id, /invoices/:id, \
-/profile/:userId, /documents/upload/:type): substitute each `:param` with a \
-`${test_data.<key>}` template that will be filled at capture time: \
-`[{"action": "navigate", "url": "/courses/${item_id}"}]`. \
-The `test_setup.seed_items` block you generate separately will create real entities \
-before capture and inject their IDs into test_data. Use these keys to build the URL. \
-For unparameterized constants (e.g. `:type` in /documents/upload/:type when it is \
-an enum like "id_card" or "license"), use the enum value directly in the URL. \
+(2) Route has ONE OR MORE path parameters (anything with `:param` in the path \
+pattern from the router): substitute each `:param` with a `${test_data.<key>}` \
+template that will be filled at capture time. \
+Example for a route `/<entity>/:id` → \
+`[{"action": "navigate", "url": "/<entity>/${test_data.<entity>_id}"}]`. \
+The `test_setup.seed_items` block you generate separately must create real \
+entities before capture and expose their IDs via matching `test_data_key` \
+entries. Use those keys to build the URL. \
+For constant-enum parameters (e.g. a `:type` param whose valid values are a \
+fixed enum from the code), use one concrete enum value directly in the URL. \
 \
 (3) ONLY use UI-click navigation (multi-step) when the route genuinely cannot be \
 reached by URL — e.g. the target is a modal/dialog with no route, or the app uses \
