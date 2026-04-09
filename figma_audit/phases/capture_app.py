@@ -164,12 +164,49 @@ def _extract_path(obj: dict, dotted_path: str) -> str:
     return str(current)
 
 
+def _endpoint_variants(endpoint: str) -> list[str]:
+    """Return candidate paths to try when an endpoint may be missing the API prefix.
+
+    Phase 1's AI often reads endpoint strings from request handlers but misses
+    the `baseUrl` prefix set on the HTTP client (dio BaseOptions, Retrofit
+    @BaseUrl, etc.). Rather than re-running Phase 1, we transparently retry
+    each endpoint with common API prefixes when the server returns 404/405.
+    """
+    if not endpoint:
+        return [endpoint]
+    variants = [endpoint]
+    for prefix in ("/api", "/v1", "/api/v1"):
+        if not endpoint.startswith(prefix + "/"):
+            variants.append(f"{prefix}{endpoint}")
+    return variants
+
+
+def _api_request_with_prefix_fallback(
+    method: str,
+    base_url: str,
+    endpoint: str,
+    **kwargs,
+):
+    """POST/PUT/GET the endpoint, retrying with API prefix variants on 404/405.
+
+    Returns the first successful response (non-404/405), or the last response
+    if all variants failed. The caller still checks the final status code.
+    """
+    import requests
+
+    last_resp = None
+    for variant in _endpoint_variants(endpoint):
+        resp = requests.request(method, f"{base_url}{variant}", **kwargs)
+        last_resp = resp
+        if resp.status_code not in (404, 405):
+            return resp, variant
+    return last_resp, endpoint
+
+
 def _api_login(
     base_url: str, test_setup: dict, credentials: dict
 ) -> str | None:
     """Authenticate via the app API using manifest config. Returns bearer token."""
-    import requests
-
     auth_endpoint = test_setup.get("auth_endpoint", "")
     if not auth_endpoint:
         return None
@@ -179,18 +216,30 @@ def _api_login(
     try:
         otp_endpoint = test_setup.get("auth_otp_request_endpoint")
         if otp_endpoint:
-            requests.post(
-                f"{base_url}{otp_endpoint}",
+            _api_request_with_prefix_fallback(
+                "POST",
+                base_url,
+                otp_endpoint,
                 json={"email": credentials.get("email")},
                 timeout=10,
             )
-        resp = requests.post(f"{base_url}{auth_endpoint}", json=payload, timeout=10)
+        resp, used_path = _api_request_with_prefix_fallback(
+            "POST", base_url, auth_endpoint, json=payload, timeout=10
+        )
         if resp.status_code != 200:
             console.print(
-                f"    [yellow]API login failed ({resp.status_code}): "
+                f"    [yellow]API login failed ({resp.status_code}) on {used_path}: "
                 f"{resp.text[:100]}[/yellow]"
             )
             return None
+        if used_path != auth_endpoint:
+            # Persist the working prefix on the test_setup dict so subsequent
+            # seed_items calls use it directly without re-probing.
+            test_setup["_api_prefix_hint"] = used_path[: len(used_path) - len(auth_endpoint)]
+            console.print(
+                f"    [dim]Using API prefix '{test_setup['_api_prefix_hint']}' "
+                f"(manifest endpoints missing it)[/dim]"
+            )
         token_path = test_setup.get("auth_token_path", "accessToken")
         token = _extract_path(resp.json(), token_path)
         if not token:
@@ -213,7 +262,6 @@ def _setup_test_data(
     Reads test_setup from the manifest to know which endpoints to call.
     Returns (created_item_ids, taken_item_id).
     """
-    import requests
 
     base = app_url.rstrip("/")
 
@@ -230,7 +278,9 @@ def _setup_test_data(
     console.print("    API login OK (seed)")
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Create seed items from manifest config
+    # Create seed items from manifest config.
+    # Apply the API prefix hint learned during login (if any) before trying.
+    api_prefix_hint = test_setup.get("_api_prefix_hint", "")
     created_ids: list[str] = []
     for i, item_spec in enumerate(test_setup["seed_items"]):
         endpoint = _resolve_template(item_spec.get("endpoint", ""), test_data)
@@ -240,8 +290,13 @@ def _setup_test_data(
         td_key = item_spec.get("test_data_key", f"item_{i}")
 
         try:
-            resp = requests.request(
-                method, f"{base}{endpoint}", json=payload, headers=headers, timeout=10
+            resp, _used = _api_request_with_prefix_fallback(
+                method,
+                base,
+                f"{api_prefix_hint}{endpoint}" if api_prefix_hint else endpoint,
+                json=payload,
+                headers=headers,
+                timeout=10,
             )
             if resp.status_code in (200, 201):
                 item_id = _extract_path(resp.json(), id_path)
@@ -272,10 +327,12 @@ def _setup_test_data(
                 merged = {**test_data, "item_id": cid}
                 endpoint = _resolve_template(take_spec.get("endpoint", ""), merged)
                 td_key = take_spec.get("test_data_key", "item_taken_id")
+                prefix = test_setup.get("_api_prefix_hint", "")
                 try:
-                    resp = requests.request(
+                    resp, _used = _api_request_with_prefix_fallback(
                         take_spec.get("method", "POST"),
-                        f"{base}{endpoint}",
+                        base,
+                        f"{prefix}{endpoint}" if prefix else endpoint,
                         headers={"Authorization": f"Bearer {main_token}"},
                         timeout=10,
                     )
@@ -489,6 +546,12 @@ async def _capture_route(
     screenshot_path = screenshots_dir / f"{slug}.png"
     await page.screenshot(path=str(screenshot_path), full_page=False)
 
+    # Capture the final landed URL. When the route has path params, this
+    # shows the substituted value (e.g. /courses/42 instead of /courses/:id).
+    # When the app redirected us (auth guard, 404 fallback), this surfaces
+    # the actual destination so the user can diagnose silent redirects.
+    final_url = page.url
+
     # Note: silent-redirect detection is handled globally after all captures
     # finish, via _dedupe_captures() which hashes every screenshot (including
     # wizard states) and flags any hash shared by 2+ captures as a navigation
@@ -501,6 +564,7 @@ async def _capture_route(
     result = {
         "page_id": page_id,
         "route": route,
+        "landed_url": final_url,
         "screenshot": f"app_screenshots/{slug}.png",
         "styles_available": styles is not None,
     }
@@ -538,12 +602,14 @@ async def _capture_route(
                 )
                 state_screenshots.append({
                     "state_id": state_id,
+                    "landed_url": page.url,
                     "screenshot": state_screenshot_rel,
                 })
             except Exception as e:
                 console.print(f"    [yellow]State {state_id} failed: {e}[/yellow]")
                 state_screenshots.append({
                     "state_id": state_id,
+                    "landed_url": page.url,
                     "screenshot": None,
                     "error": str(e)[:200],
                 })
