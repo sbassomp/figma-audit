@@ -33,6 +33,13 @@ ROUTER_PATTERNS = {
         "**/app_router.dart",
         "**/router.dart",
         "**/routes.dart",
+        # Auth guards / redirect callbacks live alongside or near the router
+        "**/auth_guard*.dart",
+        "**/auth_redirect*.dart",
+        "**/route_guard*.dart",
+        "**/router_guard*.dart",
+        "**/auth_notifier*.dart",
+        "**/auth_state*.dart",
     ],
     "react": [
         "**/routes/**/*.{ts,tsx,js,jsx}",
@@ -220,14 +227,37 @@ Rules:
 - Temperature 0: be precise and factual, only include what the code explicitly shows.
 - For navigation_steps: describe the Playwright actions needed to reach \
 each page from the app root. \
-For pages that require a specific item/entity (e.g. /items/:id), \
-DO NOT navigate directly to the URL with an ID — the app may use encrypted/hashed IDs. \
-Instead, navigate via the UI: go to the list page, then click on an item to reach the detail. \
-Example: [{"action": "navigate", "url": "/"}, {"action": "click", "text": "some item text"}, \
-{"action": "wait", "timeout": 2000}]. \
-This is more robust and works regardless of ID format. \
-For capturable_states that depend on data state (e.g. detail page "available" vs "taken"), \
-describe how to reach each state via UI interactions.
+**DEFAULT STRATEGY: direct URL navigation.** \
+Modern SPA/Flutter-web apps support deep links on EVERY route — clicking through \
+the UI is slower, brittle, and often fails on Flutter CanvasKit where DOM events \
+are unreliable. Prefer a single `navigate` step to the full route whenever possible. \
+\
+Rules for picking navigation style: \
+\
+(1) Route has NO path parameters (e.g. /my-courses, /account, /courses/ambulance/new, \
+/documents, /profile/edit): generate EXACTLY ONE step: \
+`[{"action": "navigate", "url": "/my-courses"}]`. \
+Do NOT click tabs, do NOT click menu items, do NOT go via the list page. The app \
+router resolves the deep link directly. \
+\
+(2) Route has ONE OR MORE path parameters (e.g. /courses/:id, /invoices/:id, \
+/profile/:userId, /documents/upload/:type): substitute each `:param` with a \
+`${test_data.<key>}` template that will be filled at capture time: \
+`[{"action": "navigate", "url": "/courses/${item_id}"}]`. \
+The `test_setup.seed_items` block you generate separately will create real entities \
+before capture and inject their IDs into test_data. Use these keys to build the URL. \
+For unparameterized constants (e.g. `:type` in /documents/upload/:type when it is \
+an enum like "id_card" or "license"), use the enum value directly in the URL. \
+\
+(3) ONLY use UI-click navigation (multi-step) when the route genuinely cannot be \
+reached by URL — e.g. the target is a modal/dialog with no route, or the app uses \
+opaque encrypted IDs in URLs that test_setup cannot produce. In that narrow case, \
+list the clicks: `[{"action": "navigate", "url": "/"}, {"action": "click", \
+"text": "Button"}, {"action": "wait", "timeout": 1500}]`. \
+\
+(4) For capturable_states that depend on data state (e.g. detail page "available" \
+vs "taken"): use `test_setup.take_item` to transition a seeded item between states \
+via API, then navigate to separate IDs — NOT UI clicks.
 - For form_fields: list all user-input fields visible on the page.
 - For interactive_states: list distinct visual states \
 (loading, empty, populated, error, wizard steps).
@@ -249,7 +279,22 @@ accessibility roles (button, link, tab) first, then text match, then coordinates
 For form fields, use {"action": "fill", "label": "Field Label", "value": "..."} \
 which uses accessibility labels. \
 Never rely on CSS selectors for Flutter CanvasKit apps.
-- For auth_required: check if the route is behind an auth guard/redirect.
+- For auth_required: this is CRITICAL — getting it wrong causes the audit \
+tool to capture the wrong screen (silent redirect to login). Do NOT infer this \
+from the page file alone. Determine it by inspecting the ROUTER configuration: \
+look for redirect callbacks (GoRouter `redirect:`, Navigator guards, route \
+observers, AuthGuard middleware, `requireAuth`, `loggedIn` checks). \
+A route is `auth_required: true` if AND ONLY IF: \
+(a) navigating to it while logged-out is intercepted and redirected elsewhere \
+(typically to /signin, /login, /welcome), OR \
+(b) the page itself reads user state and redirects on null user. \
+A route is `auth_required: false` if it is reachable WITHOUT a session — \
+this includes /welcome, /signin, /login, password-reset pages, AND every step \
+of a registration flow (the user is still anonymous during registration). \
+Conversely, list/detail pages, profile pages, settings, payment pages, and \
+anything reading user-scoped data are almost always `auth_required: true`. \
+When in doubt because the router code is ambiguous, prefer `auth_required: true` \
+for any route that is NOT explicitly listed as a public route in the router.
 - For test_data: suggest realistic test values for forms \
 (French context: phone +33..., French addresses).
 - Extract design tokens from the theme/token files into a structured format.
