@@ -76,10 +76,16 @@ def figma(
 @click.option("--project", "-p", default=None, help="Path to the project to analyze")
 @click.option("--output", "-o", default=None, help="Output directory")
 @click.option("--config", "config_path", type=click.Path(exists=True), help="Config YAML file")
+@click.option(
+    "--agentic",
+    is_flag=True,
+    help="Agentic mode: Claude explores the codebase with tools.",
+)
 def analyze(
     project: str | None,
     output: str | None,
     config_path: str | None,
+    agentic: bool,
 ) -> None:
     """Phase 1: Analyze project code -- detect framework, extract routes, produce manifest."""
     load_env_file()
@@ -88,6 +94,8 @@ def analyze(
         project=project,
         output=output,
     )
+    if agentic:
+        cfg.analyze_mode = "agentic"
 
     from figma_audit.phases.analyze_code import run
 
@@ -363,12 +371,18 @@ PHASE_NAMES = {
 @click.option("--figma-file", type=click.Path(exists=True), help="Local .fig file (Phase 2)")
 @click.option("--target-page", help="Figma page ID (Phase 2)")
 @click.option("--offline", is_flag=True, help="Figma offline mode (Phase 2)")
+@click.option(
+    "--agentic",
+    is_flag=True,
+    help="Use agentic mode for Phase 1 (Claude explores codebase with tools).",
+)
 def run(
     config_path: str | None,
     from_phase: str | None,
     figma_file: str | None,
     target_page: str | None,
     offline: bool,
+    agentic: bool,
 ) -> None:
     """Run the full audit pipeline (all 6 phases)."""
     import sys
@@ -381,6 +395,8 @@ def run(
         sys.exit(1)
 
     cfg = Config.load(config_path=_find_config(config_path), figma_file=figma_file)
+    if agentic:
+        cfg.analyze_mode = "agentic"
 
     phases = list(PHASE_ORDER)
     if from_phase:
