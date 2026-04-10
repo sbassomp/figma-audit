@@ -2,27 +2,29 @@
 {% block title %}{{ project.name }} - figma-audit{% endblock %}
 
 {% block content %}
-<div class="page-header flex justify-between items-center">
-  <div>
-    <h2>{{ project.name }}</h2>
-    <p class="subtitle">{{ project.app_url or 'No URL configured' }}</p>
-  </div>
-  <div class="flex gap-1 flex-wrap">
-    <a href="/projects/{{ project.slug }}/screens" class="btn">Figma screens</a>
-    <form hx-post="/projects/{{ project.slug }}/upload-fig" hx-target="#upload-area" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="flex gap-1 items-center">
-      <input type="file" name="file" accept=".fig" style="max-width: 180px;" required>
-      <button type="submit" class="btn">Import .fig</button>
-    </form>
-    <form hx-post="/projects/{{ project.slug }}/upload-screens" hx-target="#upload-area" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="flex gap-1 items-center">
-      <input type="file" name="file" accept=".zip" style="max-width: 180px;" required>
-      <button type="submit" class="btn">Import images</button>
-    </form>
+<div class="page-header">
+  <div class="flex justify-between items-center mb-1">
+    <div>
+      <h2>{{ project.name }}</h2>
+      <p class="subtitle">{{ project.app_url or 'No URL configured' }}</p>
+    </div>
     <form method="POST" action="/projects/{{ project.slug }}/start-run" class="flex gap-1 items-center">
-      <button type="submit" class="btn btn-primary">Start a run</button>
       <label class="flex items-center gap-half text-sm" style="cursor: pointer;" title="Phase 1 explores the code with tools instead of a single prompt (~$0.50-1.50 vs ~$0.30)">
         <input type="checkbox" name="agentic" value="1">
         Agentic
       </label>
+      <button type="submit" class="btn btn-primary">Start a run</button>
+    </form>
+  </div>
+  <div class="flex gap-1 items-center flex-wrap" style="margin-top: 0.5rem;">
+    <a href="/projects/{{ project.slug }}/screens" class="btn btn-sm">Figma screens</a>
+    <form hx-post="/projects/{{ project.slug }}/upload-fig" hx-target="#upload-area" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="flex gap-half items-center">
+      <input type="file" name="file" accept=".fig" style="max-width: 140px; font-size: 0.75rem;" required>
+      <button type="submit" class="btn btn-sm">Import .fig</button>
+    </form>
+    <form hx-post="/projects/{{ project.slug }}/upload-screens" hx-target="#upload-area" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="flex gap-half items-center">
+      <input type="file" name="file" accept=".zip" style="max-width: 140px; font-size: 0.75rem;" required>
+      <button type="submit" class="btn btn-sm">Import images</button>
     </form>
   </div>
 </div>
