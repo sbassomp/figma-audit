@@ -6,10 +6,10 @@ Unlike visual regression tools (BackstopJS, Percy, Chromatic) that compare two v
 
 ## Features
 
-- **Source code analysis**: automatic framework detection (Flutter, React, Vue, Angular, Next.js), extraction of routes, pages and design tokens via Claude AI
+- **Source code analysis**: automatic framework detection (Flutter, React, Vue, Angular, Next.js), extraction of routes, pages and design tokens via Claude AI. Optional **agentic mode** where Claude explores the codebase with tools instead of a single prompt dump — produces more accurate DTOs, auth guards, and test payloads
 - **Figma export**: full Figma file tree download, screen extraction, design tokens and elements via REST API, with local cache and rate limiting management
 - **Intelligent matching**: automatic association of Figma screens to application routes using vision AI (Claude Vision)
-- **Application capture**: automated navigation with Playwright, Flutter CanvasKit authentication, test data creation via API
+- **Application capture**: automated navigation with Playwright, Flutter CanvasKit authentication, test data creation via API. Includes `setup-test-data` interactive agent that validates API payloads against the live backend
 - **Hybrid comparison**: programmatic analysis (deltaE CIE2000 colors, typography, spacing) + semantic analysis via vision AI
 - **Standalone HTML report**: self-contained HTML file with embedded images, dark theme, interactive side-by-side
 - **Web dashboard**: htmx interface with project tracking, run history, screen gallery, discrepancy management (ignore, fix, annotate)
@@ -122,6 +122,9 @@ Each phase can be executed independently. Phases read from and write to the `--o
 | `figma-audit capture --app-url https://...` | 4 | Mapping + manifest | App screenshots |
 | `figma-audit compare` | 5 | Screenshots + manifests | `discrepancies.json` |
 | `figma-audit report` | 6 | Discrepancies | `report.html` |
+| `figma-audit setup-test-data` | — | Manifest + live backend | `figma-audit.yaml` |
+
+The `setup-test-data` command is an interactive agent (not part of the 6-phase pipeline). See [Agentic mode](#agentic-mode) and [Test setup configuration](#test-setup-configuration) below.
 
 ### Providing Figma screens
 
@@ -313,6 +316,53 @@ seed_account:
 | `APP_URL` | Application URL (alternative to YAML) |
 
 Variables are automatically loaded from `~/.config/figma-audit/env`.
+
+### Agentic mode
+
+Phase 1 (code analysis) supports two modes:
+
+| Mode | Cost | Speed | Accuracy | Activation |
+|------|------|-------|----------|------------|
+| **one-shot** (default) | ~$0.30 | ~2 min | Good for simple routers; can hallucinate DTO field names on complex apps | Default — no flag needed |
+| **agentic** (opt-in) | ~$0.50-1.50 | ~5-10 min | Reads DTOs directly via `grep_code` + `read_file`; verifies auth guards in the router; produces correct `test_setup` payloads | See below |
+
+In agentic mode, Claude iteratively explores the codebase using tools (`read_file`, `grep_code`, `list_files`, `ask_user`) instead of receiving a single 150KB prompt dump. This avoids the main failure mode of one-shot analysis: hallucinated field names and wrong `auth_required` flags.
+
+#### Activating agentic mode
+
+Three ways (CLI flag takes precedence over YAML, which takes precedence over env var):
+
+```bash
+# CLI flag (per-invocation)
+figma-audit analyze --agentic
+figma-audit run --agentic
+
+# YAML config (persistent)
+# In figma-audit.yaml:
+analyze_mode: agentic
+
+# Environment variable
+export FIGMA_AUDIT_ANALYZE_MODE=agentic
+```
+
+**From the web dashboard**: check the **Agentic** checkbox next to the "Lancer un run" button on the project page. The agent's tool calls appear in real time in the run progress bar (e.g. `iter 3 · grep_code(AuthGuard)`).
+
+#### The `setup-test-data` interactive agent
+
+For cases where Phase 1's `test_setup` output is wrong (the most common symptom: `Item 1 failed (400)` in Phase 4 logs, followed by `Unresolved placeholder` errors), you can run the interactive `setup-test-data` agent instead of manually editing the YAML:
+
+```bash
+figma-audit setup-test-data
+```
+
+This agent:
+1. Reads the existing `pages_manifest.json` to understand what endpoints need seeding
+2. Explores the project codebase to find the correct request DTO field names
+3. Builds candidate payloads and **tests them against the live backend** via HTTP
+4. Iterates on 400 validation errors (reading the error body to fix fields)
+5. Once every seed endpoint returns 2xx, writes the validated `test_setup` block to `figma-audit.yaml`
+
+The command requires an interactive terminal (it may ask clarification questions via `ask_user`). Typical cost: ~$0.40. It replaces 30-60 minutes of manual YAML editing with a 2-minute automated conversation.
 
 ### Test setup configuration
 
