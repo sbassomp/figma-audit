@@ -302,25 +302,24 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
         with open(discrepancies_path) as f:
             disc_data = json.load(f)
 
-        # Build screen lookup by name (more reliable than page_id which can have dupes)
+        # Build screen lookups: node_id is unique, name can have dupes
         screens = session.exec(
             select(Screen).where(
                 Screen.project_id == project.id,
                 Screen.status != "obsolete",
             )
         ).all()
+        screen_by_node_id: dict[str, Screen] = {}
         screen_by_name: dict[str, Screen] = {}
-        screen_by_page_id: dict[str, Screen] = {}
         for s in screens:
+            screen_by_node_id[s.figma_node_id] = s
             screen_by_name[s.name] = s
-            if s.mapped_page_id:
-                screen_by_page_id[s.mapped_page_id] = s
 
         for comp in disc_data.get("comparisons", []):
-            # Match by Figma screen name first (exact), fall back to page_id
-            screen = screen_by_name.get(comp.get("figma_screen"))
+            # Match by Figma node ID first (unique), fall back to name
+            screen = screen_by_node_id.get(comp.get("figma_screen_id"))
             if not screen:
-                screen = screen_by_page_id.get(comp.get("page_id"))
+                screen = screen_by_name.get(comp.get("figma_screen"))
             for d in comp.get("discrepancies", []):
                 disc = Discrepancy(
                     run_id=run.id,

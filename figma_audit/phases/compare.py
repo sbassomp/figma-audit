@@ -472,6 +472,7 @@ def run(config: Config) -> Path:
                 "page_id": pair["page_id"],
                 "route": pair["route"],
                 "figma_screen": pair["figma_screen_name"],
+                "figma_screen_id": pair["figma_screen_id"],
                 "figma_image": pair["figma_image"],
                 "app_image": pair["app_image"],
                 "discrepancies": discrepancies,
