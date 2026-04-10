@@ -9,11 +9,16 @@
       <p class="subtitle">{{ project.app_url or 'No URL configured' }}</p>
     </div>
     <form method="POST" action="/projects/{{ project.slug }}/start-run" class="flex gap-1 items-center">
-      <label class="flex items-center gap-half text-sm" style="cursor: pointer;" title="Phase 1 explores the code with tools instead of a single prompt (~$0.50-1.50 vs ~$0.30)">
-        <input type="checkbox" name="agentic" value="1">
+      <label class="flex items-center gap-half text-sm" style="cursor: pointer;" title="Phase 1 explores the code with tools instead of a single prompt">
+        <input type="checkbox" name="agentic" value="1" id="agentic-cb">
         Agentic
       </label>
+      <select name="analyze_model" class="text-sm" style="padding: 0.2rem 0.4rem; border-radius: 4px; background: var(--card-bg); color: var(--text); border: 1px solid var(--border); display: none;" id="model-select" title="Model for agentic Phase 1">
+        <option value="">Sonnet (~$1)</option>
+        <option value="claude-opus-4-6">Opus (~$5)</option>
+      </select>
       <button type="submit" class="btn btn-primary">Start a run</button>
+      <script>document.getElementById('agentic-cb').addEventListener('change', function() { document.getElementById('model-select').style.display = this.checked ? '' : 'none'; });</script>
     </form>
   </div>
   <div class="flex gap-1 items-center flex-wrap" style="margin-top: 0.5rem;">

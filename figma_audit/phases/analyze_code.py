@@ -420,10 +420,31 @@ grep you run adds to the cumulative context. Be STRATEGIC:
 3. For auth_required: read the router redirect logic (GoRouter `redirect:`, AuthGuard, \
    route observers). A route is auth_required: true if navigating to it while logged-out \
    redirects elsewhere. When in doubt, prefer true.
-4. For test_setup: grep for the API client / repository classes to find the exact \
+4. For test_setup: this has TWO SEPARATE parts — do NOT mix them up: \
+   \
+   (a) AUTH FIELDS (how to log in via API): \
+       - auth_endpoint: the endpoint that VERIFIES credentials and returns a token \
+         (e.g. /api/auth/verify-otp). This is NOT the OTP request endpoint. \
+       - auth_otp_request_endpoint: OPTIONAL, the endpoint that SENDS the OTP \
+         (e.g. /api/auth/request-otp). Only include if the auth flow has a separate \
+         step for requesting the code before verifying it. \
+       - auth_payload: the body sent to auth_endpoint. Use ${test_data.X} templates. \
+       - auth_token_path: dotted path to the bearer token in the response. \
+   \
+   (b) SEED ITEMS (entities to create for capturing parameterized routes): \
+       - seed_items is a list of API calls that CREATE test data (e.g. POST /api/items). \
+       - Each seed_item has: endpoint, method, payload, id_path, test_data_key. \
+       - Do NOT put auth/login endpoints in seed_items — those belong in (a). \
+       - seed_items should ONLY contain entity-creation endpoints. \
+   \
+   For both: grep for the API client / repository classes to find the exact \
    request DTOs. Read the DTO source file to get the SERIALIZED field names \
    (@JsonValue, @JsonProperty, @SerializedName). Use ${now+1d} for future dates. \
-   Use ${test_data.X} for credential templates. NEVER guess field names.
+   Use ${test_data.X} for credential templates. NEVER guess field names. \
+   \
+   IMPORTANT: include the full API prefix in endpoints (e.g. /api/exchange/courses, \
+   not just /exchange/courses). Read the API client's baseUrl/baseOptions to find \
+   the prefix.
 5. For navigation_steps: prefer direct URL navigation. Only use click-based steps for \
    modals without a route. For parameterized routes (/:id), use ${test_data.<key>}.
 6. For design tokens: read the MAIN theme/token file only. Extract colors, fonts, \
@@ -520,8 +541,11 @@ def _run_agentic(config: Config) -> Path:
         framework, project_dir, router_paths, page_paths, token_paths, api_paths
     )
 
-    console.print("\n[bold]Starting agentic analysis...[/bold]")
-    console.print("[dim]Budget: max 30 iterations, ~$0.50-1.50 expected[/dim]\n")
+    # Model selection: use analyze_model override if set, otherwise default
+    model = config.analyze_model or None  # None = ClaudeClient default (Sonnet)
+    model_label = model or "sonnet (default)"
+    console.print(f"\n[bold]Starting agentic analysis with {model_label}...[/bold]")
+    console.print("[dim]Budget: max 30 iterations[/dim]\n")
 
     # Wire progress updates so the web UI polling shows agent iterations
     from figma_audit.utils.progress import get_progress
@@ -533,7 +557,8 @@ def _run_agentic(config: Config) -> Path:
             run_progress.update(step=step_label, progress=iteration, total=30)
 
     global _last_client
-    client = ClaudeClient(api_key=config.anthropic_api_key)
+    client = ClaudeClient(api_key=config.anthropic_api_key, model=model) \
+        if model else ClaudeClient(api_key=config.anthropic_api_key)
     result = run_agent_loop(
         client=client,
         system_prompt=AGENTIC_SYSTEM_PROMPT,

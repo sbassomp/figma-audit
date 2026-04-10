@@ -595,6 +595,7 @@ def start_run(
     slug: str,
     background_tasks: BackgroundTasks,
     agentic: str | None = Form(default=None),
+    analyze_model: str | None = Form(default=None),
     session: Session = Depends(get_session),
 ):
     project = session.exec(select(Project).where(Project.slug == slug)).first()
@@ -607,13 +608,21 @@ def start_run(
     session.refresh(run)
 
     background_tasks.add_task(
-        _run_pipeline_bg, project.id, run.id, agentic=bool(agentic)
+        _run_pipeline_bg,
+        project.id,
+        run.id,
+        agentic=bool(agentic),
+        analyze_model=analyze_model or None,
     )
     return RedirectResponse(f"/projects/{slug}/runs/{run.id}", status_code=303)
 
 
 def _run_pipeline_bg(
-    project_id: int, run_id: int, *, agentic: bool = False
+    project_id: int,
+    run_id: int,
+    *,
+    agentic: bool = False,
+    analyze_model: str | None = None,
 ) -> None:
     """Execute the full pipeline in background with proper config."""
     import json
@@ -669,6 +678,8 @@ def _run_pipeline_bg(
 
             if agentic:
                 cfg.analyze_mode = "agentic"
+            if analyze_model:
+                cfg.analyze_model = analyze_model
 
             phases = ["analyze", "figma", "match", "capture", "compare", "report"]
 

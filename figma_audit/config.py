@@ -54,6 +54,7 @@ class Config(BaseModel):
     seed_account: SeedAccountConfig = Field(default_factory=SeedAccountConfig)
     test_setup: dict = Field(default_factory=dict)
     analyze_mode: str = "one-shot"  # "one-shot" | "agentic"
+    analyze_model: str | None = None  # Override model for Phase 1 (e.g. "claude-opus-4-6")
     include_routes: list[str] = Field(default_factory=list)
     exclude_routes: list[str] = Field(default_factory=list)
 
