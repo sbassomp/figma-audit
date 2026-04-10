@@ -395,12 +395,28 @@ of all pages/screens for a Figma design audit tool.
 You have tools to explore the project directory: read_file, grep_code, list_files. \
 Use them to navigate the codebase iteratively — do NOT ask for files to be provided.
 
+## CRITICAL — Token budget management
+
+You have a finite token budget (~800K input tokens). Every file you read and every \
+grep you run adds to the cumulative context. Be STRATEGIC:
+- Do NOT read page files one by one — read the ROUTER first, it lists ALL routes \
+  in a single file. Extract page names, routes, auth guards from it.
+- For page files, only read the ones you CANNOT infer from the router (e.g. when \
+  you need form_fields or complex capturable_states).
+- Use grep_code with NARROW globs (e.g. '**/*_repository.dart') instead of broad \
+  searches. Prefer targeted file reads over exploratory greps.
+- For design tokens, read ONLY the main theme file, not every variant.
+- Call submit_result as soon as you have enough information. Do NOT read every file \
+  in the project — aim for 10-15 file reads total, not 30+.
+
 ## Process
 
-1. Start by reading the router file(s) listed in the initial message. They define every \
-   route in the application and the auth guards.
-2. For each route you discover, read the corresponding page/screen file to understand: \
-   what it renders, what parameters it takes, what state it needs.
+1. Start by reading the router file(s) listed in the initial message. They define \
+   every route in the application and the auth guards. Extract ALL routes and their \
+   auth status from this single read — this is your most important file.
+2. Only read individual page/screen files when you need details the router doesn't \
+   provide (form fields, complex states). Skip pages that are straightforward \
+   from the router definition alone.
 3. For auth_required: read the router redirect logic (GoRouter `redirect:`, AuthGuard, \
    route observers). A route is auth_required: true if navigating to it while logged-out \
    redirects elsewhere. When in doubt, prefer true.
@@ -410,8 +426,10 @@ Use them to navigate the codebase iteratively — do NOT ask for files to be pro
    Use ${test_data.X} for credential templates. NEVER guess field names.
 5. For navigation_steps: prefer direct URL navigation. Only use click-based steps for \
    modals without a route. For parameterized routes (/:id), use ${test_data.<key>}.
-6. For design tokens: read theme/token files to extract colors, fonts, spacing, radii.
-7. When done, call submit_result with the complete manifest JSON.
+6. For design tokens: read the MAIN theme/token file only. Extract colors, fonts, \
+   spacing, radii.
+7. When done, call submit_result with the complete manifest JSON. Do not \
+   over-explore — completeness matters less than correctness.
 
 ## Output schema (the argument to submit_result)
 
@@ -526,6 +544,7 @@ def _run_agentic(config: Config) -> Path:
         max_iterations=30,
         max_wall_seconds=900.0,
         max_tokens_per_turn=16384,
+        max_total_input_tokens=800_000,
         on_iteration=_on_iteration,
     )
     _last_client = client
