@@ -240,6 +240,79 @@ class ClaudeClient:
 
         raise ClaudeClientError(f"Max retries ({MAX_RETRIES}) exceeded")
 
+    def messages_raw(
+        self,
+        *,
+        system: str | list[dict],
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        max_tokens: int = 4096,
+        temperature: float = 0.0,
+        phase: str = "",
+        cache_system: bool = True,
+    ):
+        """Low-level wrapper around messages.create for the agentic loop.
+
+        Unlike `analyze`, this does NOT parse the response as JSON — it returns
+        the raw Anthropic Message object so the caller can dispatch tool_use
+        blocks. Used by `agent_loop.run_agent_loop`.
+
+        Token usage is recorded against the given phase. If `cache_system` is
+        true and `system` is a string, it is wrapped with a `cache_control:
+        {type: "ephemeral"}` block so the prompt prefix is cached on the
+        Anthropic side, dramatically reducing per-iteration cost on long
+        agentic loops where the same system prompt is sent every turn.
+
+        Retries on rate limits and transient API errors with exponential
+        backoff (same policy as `analyze`).
+        """
+        # Wrap a plain string system prompt in a cacheable block.
+        if cache_system and isinstance(system, str):
+            system_param: list[dict] | str = [
+                {
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ]
+        else:
+            system_param = system
+
+        kwargs: dict = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": system_param,
+            "messages": messages,
+        }
+        if tools:
+            kwargs["tools"] = tools
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                response = self.client.messages.create(**kwargs)
+                self.usage.add(response, phase=phase)
+                return response
+
+            except anthropic.RateLimitError:
+                wait = RETRY_BACKOFF * attempt * 4
+                console.print(f"[yellow]Rate limited. Waiting {wait}s...[/yellow]")
+                time.sleep(wait)
+                continue
+
+            except anthropic.APIError as e:
+                if attempt < MAX_RETRIES:
+                    console.print(
+                        f"[yellow]API error (attempt {attempt}): {e}. Retrying...[/yellow]"
+                    )
+                    time.sleep(RETRY_BACKOFF * attempt)
+                    continue
+                raise ClaudeClientError(
+                    f"Claude API error after {MAX_RETRIES} attempts: {e}"
+                )
+
+        raise ClaudeClientError(f"Max retries ({MAX_RETRIES}) exceeded")
+
     def print_usage(self) -> None:
         """Print token usage summary to console."""
         if self.usage.calls == 0:
