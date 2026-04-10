@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -81,6 +82,7 @@ def run_agent_loop(
     max_wall_seconds: float = 600.0,
     max_tokens_per_turn: int = 4096,
     max_total_input_tokens: int = 400_000,
+    on_iteration: Callable[[int, str, str], None] | None = None,
 ) -> AgentResult:
     """Run an agentic conversation until the model calls submit_result.
 
@@ -199,11 +201,12 @@ def run_agent_loop(
                 }
             )
 
-            # One-line iteration log
+            # One-line iteration log + optional progress callback
             short_input = json.dumps(tool_input, ensure_ascii=False)[:80]
-            console.print(
-                f"  [dim]iter {iteration:2d} · {tool_name}({short_input})[/dim]"
-            )
+            step_label = f"iter {iteration} · {tool_name}({short_input})"
+            console.print(f"  [dim]{step_label}[/dim]")
+            if on_iteration:
+                on_iteration(iteration, tool_name, step_label)
 
         # If submit_result was called this turn, we're done.
         if submitted_payload is not None:

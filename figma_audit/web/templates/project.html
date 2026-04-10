@@ -17,8 +17,12 @@
       <input type="file" name="file" accept=".zip" style="max-width: 180px;" required>
       <button type="submit" class="btn">Importer images</button>
     </form>
-    <form method="POST" action="/projects/{{ project.slug }}/start-run">
+    <form method="POST" action="/projects/{{ project.slug }}/start-run" class="flex gap-1 items-center">
       <button type="submit" class="btn btn-primary">Lancer un run</button>
+      <label class="flex items-center gap-half text-sm" style="cursor: pointer;" title="Phase 1 explore le code avec des outils au lieu d'un prompt unique (~$0.50-1.50 vs ~$0.30)">
+        <input type="checkbox" name="agentic" value="1">
+        Agentic
+      </label>
     </form>
   </div>
 </div>

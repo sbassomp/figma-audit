@@ -362,6 +362,7 @@ label {
 .flex { display: flex; }
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
+.gap-half { gap: 0.25rem; }
 .gap-1 { gap: 0.5rem; }
 .gap-2 { gap: 1rem; }
 .mt-1 { margin-top: 0.5rem; }

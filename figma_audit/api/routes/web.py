@@ -594,6 +594,7 @@ def _process_fig_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
 def start_run(
     slug: str,
     background_tasks: BackgroundTasks,
+    agentic: str | None = Form(default=None),
     session: Session = Depends(get_session),
 ):
     project = session.exec(select(Project).where(Project.slug == slug)).first()
@@ -605,11 +606,15 @@ def start_run(
     session.commit()
     session.refresh(run)
 
-    background_tasks.add_task(_run_pipeline_bg, project.id, run.id)
+    background_tasks.add_task(
+        _run_pipeline_bg, project.id, run.id, agentic=bool(agentic)
+    )
     return RedirectResponse(f"/projects/{slug}/runs/{run.id}", status_code=303)
 
 
-def _run_pipeline_bg(project_id: int, run_id: int) -> None:
+def _run_pipeline_bg(
+    project_id: int, run_id: int, *, agentic: bool = False
+) -> None:
     """Execute the full pipeline in background with proper config."""
     import json
     from datetime import datetime, timezone
@@ -661,6 +666,9 @@ def _run_pipeline_bg(project_id: int, run_id: int) -> None:
             if project.seed_email:
                 cfg.seed_account.email = project.seed_email
                 cfg.seed_account.otp = project.seed_otp
+
+            if agentic:
+                cfg.analyze_mode = "agentic"
 
             phases = ["analyze", "figma", "match", "capture", "compare", "report"]
 

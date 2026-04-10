@@ -505,6 +505,15 @@ def _run_agentic(config: Config) -> Path:
     console.print("\n[bold]Starting agentic analysis...[/bold]")
     console.print("[dim]Budget: max 30 iterations, ~$0.50-1.50 expected[/dim]\n")
 
+    # Wire progress updates so the web UI polling shows agent iterations
+    from figma_audit.utils.progress import get_progress
+
+    run_progress = get_progress()
+
+    def _on_iteration(iteration: int, tool_name: str, step_label: str) -> None:
+        if run_progress:
+            run_progress.update(step=step_label, progress=iteration, total=30)
+
     global _last_client
     client = ClaudeClient(api_key=config.anthropic_api_key)
     result = run_agent_loop(
@@ -517,6 +526,7 @@ def _run_agentic(config: Config) -> Path:
         max_iterations=30,
         max_wall_seconds=900.0,
         max_tokens_per_turn=16384,
+        on_iteration=_on_iteration,
     )
     _last_client = client
     client.print_usage()
