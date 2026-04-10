@@ -85,11 +85,39 @@ Exemples de choses a SIGNALER :
 - Border-radius different sur un bouton
 - Taille ou poids de police different
 
-IMPORTANT - Sois MINUTIEUX sur les details visuels :
-- Compare la couleur de FOND et la couleur de TEXTE de chaque badge/label separement
-- Compare chaque icone de la navigation bar individuellement
-- Verifie le positionnement exact des pastilles de notification (badges numeriques)
-- Compare les variantes de style (filled vs outlined, round vs square)
+IMPORTANT - Sois INTRANSIGEANT sur chaque detail visuel :
+
+COULEURS DE FOND — zero tolerance :
+- Compare la couleur de fond de CHAQUE zone : app bar, page body, cards, \
+  bottom nav, modals, badges, boutons. La moindre difference de teinte est \
+  un ecart (par exemple un fond gris fonce #1A1A2E vs un noir pur #000000).
+- Compare la couleur de FOND et la couleur de TEXTE de chaque badge/label separement.
+- Verifie les couleurs de bordure (stroke) et d'ombre (shadow) si visibles.
+
+FORMES ET BORDURES — zero tolerance :
+- Compare le border-radius de chaque card, bouton, champ de saisie, badge, \
+  et image. Un bouton arrondi (radius 24px) vs un bouton legerement arrondi \
+  (radius 8px) est un ecart important, pas mineur.
+- Compare les coins arrondis des images et avatars (circle vs rounded square vs sharp).
+- Verifie les separateurs (dividers) : presence, couleur, epaisseur.
+
+POSITIONS ET ALIGNEMENT — zero tolerance :
+- Compare le placement global de chaque section : la position verticale de la \
+  navigation bar, du header, du contenu principal, du FAB (floating action button).
+- Verifie l'alignement horizontal : centré vs aligne a gauche vs justifie.
+- Compare la taille relative des elements entre eux (proportions).
+- Verifie le padding interne des cards et des boutons.
+- La position d'un element decale de plus de ~4px visuellement est un ecart.
+
+ICONES ET NAVIGATION :
+- Compare chaque icone de la navigation bar individuellement (forme, style, couleur).
+- Verifie le positionnement exact des pastilles de notification (badges numeriques).
+- Compare les variantes de style (filled vs outlined, round vs square).
+
+PRINCIPE DE SEVERITE : le Figma est la verite absolue. Toute deviation \
+visible a l'oeil nu est au minimum "important". Reserve "minor" uniquement \
+pour les differences quasi-invisibles (1-2px de spacing, legere variation \
+d'ombre). Si tu hesites entre "important" et "minor", choisis "important".
 
 For each discrepancy found:
 - category: one of the 8 above
