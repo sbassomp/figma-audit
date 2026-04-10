@@ -158,7 +158,7 @@ def upload_screens(
 
     project = session.exec(select(Project).where(Project.slug == slug)).first()
     if not project:
-        return "<div>Projet non trouve</div>"
+        return "<div>Project not found</div>"
 
     # Save uploaded file to temp
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
@@ -168,10 +168,10 @@ def upload_screens(
     # Init progress
     _upload_progress[slug] = {
         "steps": [
-            {"label": "Extraction du ZIP", "status": "running", "detail": ""},
-            {"label": "Conversion PDF → PNG", "status": "pending", "detail": ""},
-            {"label": "Matching avec le manifest", "status": "pending", "detail": ""},
-            {"label": "Synchronisation DB", "status": "pending", "detail": ""},
+            {"label": "Extracting ZIP", "status": "running", "detail": ""},
+            {"label": "Converting PDF to PNG", "status": "pending", "detail": ""},
+            {"label": "Matching with manifest", "status": "pending", "detail": ""},
+            {"label": "Syncing to DB", "status": "pending", "detail": ""},
         ],
         "progress_current": 0,
         "progress_total": 0,
@@ -217,7 +217,7 @@ def _process_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
         with Session(engine) as session:
             project = session.get(Project, project_id)
             if not project:
-                progress["error"] = "Projet non trouve"
+                progress["error"] = "Project not found"
                 progress["done"] = True
                 return
 
@@ -238,7 +238,7 @@ def _process_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
             with zipfile.ZipFile(tmp_path) as zf:
                 zf.extractall(extract_dir)
             progress["steps"][0]["status"] = "done"
-            progress["steps"][0]["detail"] = f"{len(list(extract_dir.iterdir()))} fichiers"
+            progress["steps"][0]["detail"] = f"{len(list(extract_dir.iterdir()))} files"
 
             # Step 2: Convert PDFs to PNGs
             progress["steps"][1]["status"] = "running"
@@ -325,7 +325,7 @@ def _process_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
                         session.add(sc)
                         updated += 1
                 session.commit()
-                progress["steps"][3]["detail"] = f"{updated} maj"
+                progress["steps"][3]["detail"] = f"{updated} updated"
 
             progress["steps"][3]["status"] = "done"
             shutil.rmtree(extract_dir, ignore_errors=True)
@@ -356,7 +356,7 @@ def upload_fig(
 
     project = session.exec(select(Project).where(Project.slug == slug)).first()
     if not project:
-        return "<div>Projet non trouve</div>"
+        return "<div>Project not found</div>"
 
     with tempfile.NamedTemporaryFile(suffix=".fig", delete=False) as tmp:
         shutil.copyfileobj(file.file, tmp)
@@ -365,10 +365,10 @@ def upload_fig(
     progress_key = f"{slug}_fig"
     _upload_progress[progress_key] = {
         "steps": [
-            {"label": "Parsing du fichier .fig", "status": "running", "detail": ""},
-            {"label": "Identification des ecrans", "status": "pending", "detail": ""},
-            {"label": "Extraction des design tokens", "status": "pending", "detail": ""},
-            {"label": "Synchronisation DB", "status": "pending", "detail": ""},
+            {"label": "Parsing .fig file", "status": "running", "detail": ""},
+            {"label": "Identifying screens", "status": "pending", "detail": ""},
+            {"label": "Extracting design tokens", "status": "pending", "detail": ""},
+            {"label": "Syncing to DB", "status": "pending", "detail": ""},
         ],
         "progress_current": 0,
         "progress_total": 0,
@@ -411,7 +411,7 @@ def _process_fig_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
         with Session(engine) as session:
             project = session.get(Project, project_id)
             if not project:
-                progress["error"] = "Projet non trouve"
+                progress["error"] = "Project not found"
                 progress["done"] = True
                 return
 
@@ -440,7 +440,7 @@ def _process_fig_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
 
             screens = _identify_screens(file_data)
             progress["steps"][1]["status"] = "done"
-            progress["steps"][1]["detail"] = f"{len(screens)} ecrans"
+            progress["steps"][1]["detail"] = f"{len(screens)} screens"
 
             # Step 3: Extract elements and build manifest
             progress["steps"][2]["status"] = "running"
@@ -577,7 +577,7 @@ def _process_fig_upload_bg(slug: str, tmp_path: str, project_id: int) -> None:
             if manifest_file.exists():
                 manifest_file.unlink()
 
-            detail = f"{created} new, {updated} maj"
+            detail = f"{created} new, {updated} updated"
             if n_obsoleted:
                 detail += f", {n_obsoleted} obsolete"
             progress["steps"][3]["status"] = "done"
@@ -714,12 +714,12 @@ def _run_pipeline_bg(
                     manifest_file = Path(cfg.output_dir) / "pages_manifest.json"
                     if manifest_file.exists():
                         n_pages = _count_json("pages_manifest.json", "pages")
-                        _step(f"Manifest existant ({n_pages} pages) — skip")
+                        _step(f"Existing manifest ({n_pages} pages) — skip")
                         progress.finish_phase(detail=f"{n_pages} pages (cached)")
                         _save_progress()
                         continue
 
-                    _step("Lecture des fichiers source...")
+                    _step("Reading source files...")
                     from figma_audit.phases.analyze_code import run as run_analyze
 
                     run_analyze(cfg)
@@ -730,12 +730,12 @@ def _run_pipeline_bg(
                     )
 
                 elif phase_name == "figma":
-                    _step("Lecture du cache Figma...")
+                    _step("Reading Figma cache...")
                     from figma_audit.phases.export_figma import run as run_figma
 
                     run_figma(cfg, offline=True)
                     n_screens = _count_json("figma_manifest.json", "screens")
-                    progress.finish_phase(detail=f"{n_screens} ecrans")
+                    progress.finish_phase(detail=f"{n_screens} screens")
 
                 elif phase_name == "match":
                     import yaml
@@ -752,14 +752,14 @@ def _run_pipeline_bg(
                                 for m in existing.get("mappings", [])
                                 if m.get("route")
                             )
-                            _step(f"Mapping existant ({matched} matches) — skip")
+                            _step(f"Existing mapping ({matched} matches) — skip")
                             progress.finish_phase(
                                 detail=f"{matched} matches (cached)"
                             )
                             _save_progress()
                             continue
 
-                    _step("Envoi des ecrans a Claude Vision...")
+                    _step("Sending screens to Claude Vision...")
                     from figma_audit.phases.match_screens import run as run_match
 
                     mapping_path = run_match(cfg)
@@ -782,7 +782,7 @@ def _run_pipeline_bg(
                     )
 
                 elif phase_name == "capture":
-                    _step("Login + creation donnees de test...")
+                    _step("Login + creating test data...")
                     from figma_audit.phases.capture_app import run as run_capture
 
                     run_capture(cfg)
@@ -796,7 +796,7 @@ def _run_pipeline_bg(
                     progress.finish_phase(detail=f"{n_caps} pages")
 
                 elif phase_name == "compare":
-                    _step("Comparaison Figma vs App par Claude Vision...")
+                    _step("Comparing Figma vs App with Claude Vision...")
                     from figma_audit.phases.compare import run as run_compare
 
                     run_compare(cfg)
@@ -809,11 +809,11 @@ def _run_pipeline_bg(
                                 "total_discrepancies", 0
                             )
                     progress.finish_phase(
-                        detail=f"{n_discs} ecarts", cost=cost, tokens=tokens
+                        detail=f"{n_discs} discrepancies", cost=cost, tokens=tokens
                     )
 
                 elif phase_name == "report":
-                    _step("Generation du rapport HTML...")
+                    _step("Generating HTML report...")
                     from figma_audit.phases.report import run as run_report
 
                     report_path = run_report(cfg)

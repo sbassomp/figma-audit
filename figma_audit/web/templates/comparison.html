@@ -9,24 +9,24 @@
       <p class="subtitle">
         <span class="mono">{{ capture.route }}</span>
         <span class="fidelity-badge fidelity-{{ fidelity }}">{{ fidelity }}</span>
-        <span class="text-muted">- {{ discrepancies | length }} ecart(s)</span>
+        <span class="text-muted">- {{ discrepancies | length }} discrepancy(ies)</span>
       </p>
       {% if capture.landed_url %}
       <p class="text-xs text-muted mono" style="margin-top: 0.25rem; word-break: break-all;">
-        URL testee : <a href="{{ capture.landed_url }}" target="_blank" rel="noopener" style="color: var(--text-muted);">{{ capture.landed_url }}</a>
+        Tested URL: <a href="{{ capture.landed_url }}" target="_blank" rel="noopener" style="color: var(--text-muted);">{{ capture.landed_url }}</a>
       </p>
       {% endif %}
     </div>
-    <a href="/projects/{{ project.slug }}/runs/{{ run_id }}" class="btn">Retour au run</a>
+    <a href="/projects/{{ project.slug }}/runs/{{ run_id }}" class="btn">Back to run</a>
   </div>
 </div>
 
 {% if fidelity == 'mismatch' %}
 <div class="card" style="border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); margin-bottom: 1rem;">
-  <div style="color: #f59e0b; font-weight: 700; font-size: 1rem; margin-bottom: 0.25rem;">Matching suspect</div>
+  <div style="color: #f59e0b; font-weight: 700; font-size: 1rem; margin-bottom: 0.25rem;">Suspect matching</div>
   <p class="text-sm" style="color: #fbbf24; margin: 0;">
-    Ces deux ecrans ne semblent pas correspondre. La comparaison ci-dessous n'est pas fiable.
-    Verifiez le mapping dans <code>screen_mapping.yaml</code> et relancez le run si necessaire.
+    These two screens do not seem to match. The comparison below is not reliable.
+    Check the mapping in <code>screen_mapping.yaml</code> and rerun if necessary.
   </p>
 </div>
 {% endif %}
@@ -38,7 +38,7 @@
     <img src="/files/{{ project.slug }}/{{ screen.image_path }}" alt="Figma: {{ screen.name }}">
     {% else %}
     <div class="card" style="height:400px;display:flex;align-items:center;justify-content:center;">
-      <span class="text-muted">Image non disponible</span>
+      <span class="text-muted">Image not available</span>
     </div>
     {% endif %}
   </div>
@@ -48,7 +48,7 @@
     <img src="/files/{{ project.slug }}/{{ capture.screenshot_path }}" alt="App: {{ capture.page_id }}">
     {% else %}
     <div class="card" style="height:400px;display:flex;align-items:center;justify-content:center;">
-      <span class="text-muted">Image non disponible</span>
+      <span class="text-muted">Image not available</span>
     </div>
     {% endif %}
   </div>
@@ -59,13 +59,13 @@
   <button class="btn"
     hx-get="/htmx/projects/{{ project.slug }}/runs/{{ run_id }}/fix-prompt/{{ capture.page_id }}{% if screen.id %}?screen_id={{ screen.id }}{% endif %}"
     hx-target="#fix-prompt-area"
-    hx-swap="innerHTML">Generer prompt correctif</button>
+    hx-swap="innerHTML">Generate fix prompt</button>
   <div id="fix-prompt-area"></div>
 </div>
 {% endif %}
 
 <div class="card">
-  <h3>Ecarts ({{ discrepancies | length }})</h3>
+  <h3>Discrepancies ({{ discrepancies | length }})</h3>
 
   {% for d in discrepancies %}
   <div class="discrepancy {{ d.severity }}" id="disc-{{ d.id }}">
@@ -85,9 +85,9 @@
     {% endif %}
     {% if d.status == 'open' %}
     <div class="discrepancy-actions">
-      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/ignored" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Ignorer</button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/ignored" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Ignore</button>
       <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/wontfix" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Won't fix</button>
-      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/fixed" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Corrige</button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/fixed" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Fixed</button>
     </div>
     {% endif %}
   </div>

@@ -26,20 +26,20 @@ You will receive two images:
 You will also receive context about the page: description, auth state, form fields, \
 visual states, and structural text/font info from the Figma design.
 
-CRITICAL - Verification du matching:
-AVANT de comparer les details, verifie que les deux images montrent le MEME TYPE de page. \
-Par exemple un splash/onboarding vs une liste/dashboard, ou un formulaire vs une page de profil.
-Si les deux images montrent des ecrans fondamentalement differents (pas le meme type de page), \
-les ecrans ont ete mal associes. Dans ce cas:
-- Met overall_fidelity a "mismatch"
-- Ajoute UN SEUL discrepancy:
+CRITICAL - Matching verification:
+BEFORE comparing details, verify that both images show the SAME TYPE of page. \
+For example a splash/onboarding vs a list/dashboard, or a form vs a profile page.
+If the two images show fundamentally different screens (not the same type of page), \
+the screens have been incorrectly matched. In that case:
+- Set overall_fidelity to "mismatch"
+- Add a SINGLE discrepancy:
   category: "MATCHING_ERROR"
-  description: "Les deux ecrans ne correspondent pas — [explication de ce que chaque image montre]"
+  description: "The two screens do not match — [explain what each image shows]"
   severity: "critical"
-- Ne genere PAS d'autres discrepancies (elles seraient toutes fausses)
-- Le summary doit expliquer que le matching est incorrect
+- Do NOT generate any other discrepancies (they would all be false)
+- The summary must explain that the matching is incorrect
 
-Si les deux images montrent bien le meme type de page, procede a la comparaison normale ci-dessous.
+If both images do show the same type of page, proceed with the normal comparison below.
 
 IMPORTANT for COLORS: Base your color comparison ONLY on the two images you see.
 Do NOT rely on any hex color values mentioned in the text context — they may come from a
@@ -58,70 +58,70 @@ Compare element by element on these criteria:
 while the Figma shows a populated state with data. This is NOT a design gap but a content gap.
 
 IMPORTANT - Distinguish DESIGN gaps from DATA gaps:
-Les donnees dynamiques (noms, adresses, dates, heures, prix, distances, durees, \
-numeros de telephone, emails, photos de profil) sont TOUJOURS differentes entre \
-le Figma (mockup) et l'app (donnees reelles). Ne JAMAIS les signaler comme ecarts. \
-Ignore completement toute difference qui porte sur le CONTENU des donnees.
-Concentre-toi uniquement sur :
-- La STRUCTURE (est-ce que les bons composants sont presents ?)
-- Le STYLE (couleurs de fond, couleurs de texte, tailles, polices, border-radius)
-- Les ICONES (meme icone ? meme couleur ? meme taille ?)
-- Le POSITIONNEMENT (alignement, espacement, placement des badges/indicateurs)
-- Les ETATS VISUELS (badge actif/inactif, couleur d'un label selon le contexte)
+Dynamic data (names, addresses, dates, times, prices, distances, durations, \
+phone numbers, emails, profile photos) are ALWAYS different between \
+the Figma (mockup) and the app (real data). NEVER report them as discrepancies. \
+Completely ignore any difference that concerns the CONTENT of the data.
+Focus only on:
+- STRUCTURE (are the right components present?)
+- STYLE (background colors, text colors, sizes, fonts, border-radius)
+- ICONS (same icon? same color? same size?)
+- POSITIONING (alignment, spacing, placement of badges/indicators)
+- VISUAL STATES (active/inactive badge, label color based on context)
 
-Exemples de choses a NE PAS signaler :
-- Prix/montant different (170€ vs 79€) → donnee dynamique
-- Adresse/lieu different → donnee dynamique
-- Date/heure differente → donnee dynamique
-- Nom de personne different → donnee dynamique
-- Distance/duree/quantite differente → donnee dynamique
-- Numero de version, identifiants → ignore
+Examples of things NOT to report:
+- Different price/amount (170€ vs 79€) → dynamic data
+- Different address/location → dynamic data
+- Different date/time → dynamic data
+- Different person name → dynamic data
+- Different distance/duration/quantity → dynamic data
+- Version number, identifiers → ignore
 
-Exemples de choses a SIGNALER :
-- Couleur de fond d'un badge differente (bleu vs vert)
-- Couleur de texte d'un label differente (noir vs blanc)
-- Icone differente dans la navigation bar
-- Position d'une pastille de notification decalee
-- Border-radius different sur un bouton
-- Taille ou poids de police different
+Examples of things TO REPORT:
+- Different badge background color (blue vs green)
+- Different label text color (black vs white)
+- Different icon in the navigation bar
+- Shifted notification badge position
+- Different border-radius on a button
+- Different font size or weight
 
-IMPORTANT - Sois INTRANSIGEANT sur chaque detail visuel :
+IMPORTANT - Be UNCOMPROMISING on every visual detail:
 
-COULEURS DE FOND — zero tolerance :
-- Compare la couleur de fond de CHAQUE zone : app bar, page body, cards, \
-  bottom nav, modals, badges, boutons. La moindre difference de teinte est \
-  un ecart (par exemple un fond gris fonce #1A1A2E vs un noir pur #000000).
-- Compare la couleur de FOND et la couleur de TEXTE de chaque badge/label separement.
-- Verifie les couleurs de bordure (stroke) et d'ombre (shadow) si visibles.
+BACKGROUND COLORS — zero tolerance:
+- Compare the background color of EVERY area: app bar, page body, cards, \
+  bottom nav, modals, badges, buttons. The slightest tint difference is \
+  a discrepancy (e.g. dark gray background #1A1A2E vs pure black #000000).
+- Compare the BACKGROUND color and TEXT color of each badge/label separately.
+- Check border (stroke) and shadow colors if visible.
 
-FORMES ET BORDURES — zero tolerance :
-- Compare le border-radius de chaque card, bouton, champ de saisie, badge, \
-  et image. Un bouton arrondi (radius 24px) vs un bouton legerement arrondi \
-  (radius 8px) est un ecart important, pas mineur.
-- Compare les coins arrondis des images et avatars (circle vs rounded square vs sharp).
-- Verifie les separateurs (dividers) : presence, couleur, epaisseur.
+SHAPES AND BORDERS — zero tolerance:
+- Compare the border-radius of every card, button, input field, badge, \
+  and image. A rounded button (radius 24px) vs a slightly rounded button \
+  (radius 8px) is an important discrepancy, not minor.
+- Compare rounded corners of images and avatars (circle vs rounded square vs sharp).
+- Check dividers: presence, color, thickness.
 
-POSITIONS ET ALIGNEMENT — zero tolerance :
-- Compare le placement global de chaque section : la position verticale de la \
-  navigation bar, du header, du contenu principal, du FAB (floating action button).
-- Verifie l'alignement horizontal : centré vs aligne a gauche vs justifie.
-- Compare la taille relative des elements entre eux (proportions).
-- Verifie le padding interne des cards et des boutons.
-- La position d'un element decale de plus de ~4px visuellement est un ecart.
+POSITIONS AND ALIGNMENT — zero tolerance:
+- Compare the overall placement of each section: vertical position of the \
+  navigation bar, header, main content, FAB (floating action button).
+- Check horizontal alignment: centered vs left-aligned vs justified.
+- Compare the relative size of elements to each other (proportions).
+- Check internal padding of cards and buttons.
+- An element shifted by more than ~4px visually is a discrepancy.
 
-ICONES ET NAVIGATION :
-- Compare chaque icone de la navigation bar individuellement (forme, style, couleur).
-- Verifie le positionnement exact des pastilles de notification (badges numeriques).
-- Compare les variantes de style (filled vs outlined, round vs square).
+ICONS AND NAVIGATION:
+- Compare each navigation bar icon individually (shape, style, color).
+- Check the exact positioning of notification badges (numeric badges).
+- Compare style variants (filled vs outlined, round vs square).
 
-PRINCIPE DE SEVERITE : le Figma est la verite absolue. Toute deviation \
-visible a l'oeil nu est au minimum "important". Reserve "minor" uniquement \
-pour les differences quasi-invisibles (1-2px de spacing, legere variation \
-d'ombre). Si tu hesites entre "important" et "minor", choisis "important".
+SEVERITY PRINCIPLE: the Figma design is the absolute truth. Any deviation \
+visible to the naked eye is at minimum "important". Reserve "minor" only \
+for nearly invisible differences (1-2px spacing, slight shadow variation). \
+If you hesitate between "important" and "minor", choose "important".
 
 For each discrepancy found:
 - category: one of the 8 above
-- description: concise description in French
+- description: concise description in English
 - severity: critical | important | minor
 - figma_value: expected value (if quantifiable)
 - app_value: observed value (if quantifiable)
@@ -134,14 +134,14 @@ Severity criteria:
 
 Also provide:
 - overall_fidelity: excellent | good | acceptable | poor
-- summary: 1-2 sentence summary in French
+- summary: 1-2 sentence summary in English
 
 Output ONLY valid JSON with this schema:
 {
   "discrepancies": [
     {
       "category": "COULEURS",
-      "description": "Le bouton principal utilise un bleu plus fonce",
+      "description": "The primary button uses a darker blue",
       "severity": "important",
       "figma_value": "#3A82F7",
       "app_value": "#2563EB",
@@ -149,7 +149,7 @@ Output ONLY valid JSON with this schema:
     }
   ],
   "overall_fidelity": "good",
-  "summary": "Resume en francais"
+  "summary": "Summary in English"
 }
 """
 
@@ -172,14 +172,14 @@ def _build_comparison_context(
     parts = []
 
     # Figma screen info
-    parts.append(f"## Ecran Figma: {figma_screen.get('name', '?')}")
+    parts.append(f"## Figma Screen: {figma_screen.get('name', '?')}")
     parts.append(f"Dimensions: {figma_screen.get('width', '?')}x{figma_screen.get('height', '?')}")
 
     # Page context from manifest (description, auth, form fields, etc.)
     if page_info:
-        header = f"\n## Page de l'application: {page_id} ({page_info.get('route', '?')})"
+        header = f"\n## Application Page: {page_id} ({page_info.get('route', '?')})"
         if state_id:
-            header += f" — etat: {state_id}"
+            header += f" — state: {state_id}"
         parts.append(header)
         desc = page_info.get("description", "")
         if desc:
@@ -187,35 +187,35 @@ def _build_comparison_context(
 
         auth = page_info.get("auth_required", False)
         if auth:
-            parts.append("Auth requise: Oui (page visible apres connexion)")
+            parts.append("Auth required: Yes (page visible after login)")
         else:
-            parts.append("Auth requise: Non (page publique, visible avant login)")
+            parts.append("Auth required: No (public page, visible before login)")
 
         req_state = page_info.get("required_state", {})
         if req_state:
             state_desc = req_state.get("description", "")
             if state_desc:
-                parts.append(f"Prerequis: {state_desc}")
+                parts.append(f"Prerequisites: {state_desc}")
             deps = req_state.get("data_dependencies", [])
             if deps:
-                parts.append(f"Donnees requises: {', '.join(deps)}")
+                parts.append(f"Required data: {', '.join(deps)}")
 
         fields = page_info.get("form_fields", [])
         if fields:
             field_descs = [f"{f['name']} ({f.get('type', '?')})" for f in fields]
-            parts.append(f"Champs de formulaire attendus: {', '.join(field_descs)}")
+            parts.append(f"Expected form fields: {', '.join(field_descs)}")
 
         states = page_info.get("interactive_states", [])
         if states:
-            parts.append(f"Etats visuels possibles: {', '.join(states)}")
+            parts.append(f"Possible visual states: {', '.join(states)}")
             if "empty" in states and "populated" in states:
                 parts.append(
-                    "ATTENTION: cette page a un etat 'empty' "
-                    "et un etat 'populated'. "
-                    "Si l'app affiche un etat vide, comparer "
-                    "la structure/layout de l'etat vide, "
-                    "pas le contenu dynamique manquant "
-                    "(categorie DONNEES_ABSENTES, severity minor)."
+                    "WARNING: this page has an 'empty' state "
+                    "and a 'populated' state. "
+                    "If the app shows an empty state, compare "
+                    "the structure/layout of the empty state, "
+                    "not the missing dynamic content "
+                    "(category DONNEES_ABSENTES, severity minor)."
                 )
 
     # Text elements — content and font info only, NO color values
@@ -223,7 +223,7 @@ def _build_comparison_context(
     if elements:
         texts = [e for e in elements if e.get("type") == "TEXT"]
         if texts:
-            parts.append("\n### Textes Figma:")
+            parts.append("\n### Figma Texts:")
             for t in texts[:20]:
                 content = (t.get("content") or "")[:60]
                 font = (
@@ -235,7 +235,7 @@ def _build_comparison_context(
 
     # App computed styles (if available)
     if app_styles and page_id in app_styles:
-        parts.append("\n### Styles computed de l'app (extraits du DOM):")
+        parts.append("\n### App computed styles (extracted from DOM):")
         styles = app_styles[page_id]
         for s in styles[:15]:
             text = (s.get("text") or "")[:40]
@@ -322,7 +322,7 @@ def run(config: Config) -> Path:
             obsolete_screen_ids = {s.figma_node_id for s in screens}
         if obsolete_screen_ids:
             n_obs = len(obsolete_screen_ids)
-            console.print(f"  [dim]{n_obs} ecran(s) obsolete(s) exclus[/dim]")
+            console.print(f"  [dim]{n_obs} obsolete screen(s) excluded[/dim]")
     except Exception as e:
         console.print(f"  [dim]DB obsolete check skipped: {e}[/dim]")
 
@@ -451,9 +451,9 @@ def run(config: Config) -> Path:
         )
 
         user_prompt = (
-            f"Image 1 = design Figma (reference). Image 2 = application reelle.\n\n"
+            f"Image 1 = Figma design (reference). Image 2 = actual application.\n\n"
             f"{context}\n\n"
-            f"Compare ces deux ecrans et liste tous les ecarts."
+            f"Compare these two screens and list all discrepancies."
         )
 
         try:
@@ -485,7 +485,7 @@ def run(config: Config) -> Path:
             if fidelity == "mismatch":
                 console.print(
                     "    [bold yellow]MISMATCH[/bold yellow] -- "
-                    "ecrans mal associes, comparaison ignoree"
+                    "screens incorrectly matched, comparison skipped"
                 )
             else:
                 severity_counts = {}
@@ -495,7 +495,7 @@ def run(config: Config) -> Path:
                 sev_str = ", ".join(f"{v} {k}" for k, v in severity_counts.items())
                 console.print(
                     f"    {fidelity} -- "
-                    f"{len(discrepancies)} ecarts ({sev_str})"
+                    f"{len(discrepancies)} discrepancies ({sev_str})"
                 )
 
         except Exception as e:
@@ -509,7 +509,7 @@ def run(config: Config) -> Path:
                     "app_image": pair["app_image"],
                     "discrepancies": [],
                     "overall_fidelity": "error",
-                    "summary": f"Erreur: {e}",
+                    "summary": f"Error: {e}",
                 }
             )
 
@@ -547,8 +547,8 @@ def run(config: Config) -> Path:
     console.print(f"\n[bold green]Comparisons saved to {discrepancies_path}[/bold green]")
     console.print(f"  {len(comparisons)} screens compared")
     if n_mismatches:
-        console.print(f"  [bold yellow]{n_mismatches} mismatch(es) detecte(s)[/bold yellow]")
-    console.print(f"  {total_discrepancies} ecarts total")
+        console.print(f"  [bold yellow]{n_mismatches} mismatch(es) detected[/bold yellow]")
+    console.print(f"  {total_discrepancies} total discrepancies")
     console.print(
         f"  Critical: {by_severity['critical']}, "
         f"Important: {by_severity['important']}, "

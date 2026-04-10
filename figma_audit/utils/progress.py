@@ -84,7 +84,7 @@ class RunProgress:
         total_cost = sum(r.cost for r in self.phase_results)
 
         console.print(f"\n{'=' * 60}")
-        console.print("[bold]Recap du run[/bold]")
+        console.print("[bold]Run summary[/bold]")
         console.print(f"{'=' * 60}")
 
         for r in self.phase_results:

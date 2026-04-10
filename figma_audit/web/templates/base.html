@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,11 +16,11 @@
   </div>
   <nav>
     <a href="/" class="{% if active_nav == 'dashboard' %}active{% endif %}">Dashboard</a>
-    <div class="section-title">Projets</div>
+    <div class="section-title">Projects</div>
     {% for p in nav_projects or [] %}
     <a href="/projects/{{ p.slug }}" class="{% if active_project == p.slug %}active{% endif %}">{{ p.name }}</a>
     {% endfor %}
-    <a href="/projects/new" class="{% if active_nav == 'new_project' %}active{% endif %}">+ Nouveau projet</a>
+    <a href="/projects/new" class="{% if active_nav == 'new_project' %}active{% endif %}">+ New project</a>
   </nav>
 </aside>
 

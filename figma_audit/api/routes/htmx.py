@@ -30,11 +30,11 @@ def _disc_card_html(d: Discrepancy, slug: str, run_id: int | None = None) -> str
         actions_html = (
             f'<div class="discrepancy-actions">'
             f'<button class="btn btn-sm" '
-            f'hx-post="{base_url}/ignored" {hx_tgt}>Ignorer</button>'
+            f'hx-post="{base_url}/ignored" {hx_tgt}>Ignore</button>'
             f'<button class="btn btn-sm" '
             f'hx-post="{base_url}/wontfix" {hx_tgt}>Won\'t fix</button>'
             f'<button class="btn btn-sm" '
-            f'hx-post="{base_url}/fixed" {hx_tgt}>Corrige</button>'
+            f'hx-post="{base_url}/fixed" {hx_tgt}>Fixed</button>'
             f"</div>"
         )
 
@@ -44,7 +44,7 @@ def _disc_card_html(d: Discrepancy, slug: str, run_id: int | None = None) -> str
     return f"""<div class="discrepancy {d.severity}" id="disc-{d.id}">
     <div class="discrepancy-header">
       <a href="{compare_url}" class="text-xs mono" style="{link_style}"
-         title="Voir la comparaison">{link_text}</a>
+         title="View comparison">{link_text}</a>
       <div class="flex gap-1 items-center">
         <span class="badge badge-{d.status}">{d.status}</span>
         <span class="badge badge-{d.severity}">{d.severity}</span>
@@ -66,7 +66,7 @@ def _screen_card_html(s: Screen, slug: str) -> str:
             "display:flex;align-items:center;"
             'justify-content:center;">'
             '<span class="text-muted text-sm">'
-            "Pas d'image</span></div>"
+            "No image</span></div>"
         )
 
     mapped = f'<span class="mono">{s.mapped_route}</span>' if s.mapped_route else ""
@@ -77,12 +77,12 @@ def _screen_card_html(s: Screen, slug: str) -> str:
         btn = (
             f'<button class="btn btn-sm" '
             f'hx-post="{scr_base}/obsolete" {scr_tgt} '
-            f'hx-confirm="Marquer cet ecran comme obsolete ?">'
+            f'hx-confirm="Mark this screen as obsolete?">'
             f"Obsolete</button>"
         )
     elif s.status == "obsolete":
         btn = (
-            f'<button class="btn btn-sm" hx-post="{scr_base}/current" {scr_tgt}>Restaurer</button>'
+            f'<button class="btn btn-sm" hx-post="{scr_base}/current" {scr_tgt}>Restore</button>'
         )
     else:
         btn = ""
@@ -317,7 +317,7 @@ def generate_fix_prompt(
     if not discs:
         return (
             '<div class="card" style="margin-top:1rem;">'
-            "<p>Aucun ecart actif a corriger.</p></div>"
+            "<p>No active discrepancies to fix.</p></div>"
         )
 
     # Get screen info
@@ -326,8 +326,8 @@ def generate_fix_prompt(
 
     # Build prompt
     lines = [
-        f"Corrige les ecarts suivants sur la page **{page_id}**",
-        f"(ecran Figma de reference : **{screen_name}**).",
+        f"Fix the following discrepancies on page **{page_id}**",
+        f"(reference Figma screen: **{screen_name}**).",
         "",
     ]
 
@@ -359,7 +359,7 @@ def generate_fix_prompt(
     copy_js = (
         "navigator.clipboard.writeText("
         "document.getElementById('fix-prompt-text').textContent"
-        ").then(()=>this.textContent='Copie !')"
+        ").then(()=>this.textContent='Copied!')"
     )
     pre_style = (
         "white-space:pre-wrap;font-size:0.8rem;"
@@ -369,8 +369,8 @@ def generate_fix_prompt(
     return (
         '<div class="card" style="margin-top:1rem;">'
         '<div class="flex justify-between items-center mb-1">'
-        "<h3>Prompt correctif</h3>"
-        f'<button class="btn btn-sm" onclick="{copy_js}">Copier</button>'
+        "<h3>Fix prompt</h3>"
+        f'<button class="btn btn-sm" onclick="{copy_js}">Copy</button>'
         "</div>"
         f'<pre id="fix-prompt-text" style="{pre_style}">{escaped}</pre>'
         "</div>"

@@ -1,23 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Ecrans Figma - {{ project.name }}{% endblock %}
+{% block title %}Figma screens - {{ project.name }}{% endblock %}
 
 {% block content %}
 <div class="page-header flex justify-between items-center">
   <div>
-    <h2>Ecrans Figma</h2>
-    <p class="subtitle">{{ project.name }} - {{ screens | length }} ecran(s)</p>
+    <h2>Figma screens</h2>
+    <p class="subtitle">{{ project.name }} - {{ screens | length }} screen(s)</p>
   </div>
   <div class="flex gap-1">
     <a href="/projects/{{ project.slug }}/screens?status=current" class="btn btn-sm {% if filter_status == 'current' %}btn-primary{% endif %}">Current</a>
     <a href="/projects/{{ project.slug }}/screens?status=obsolete" class="btn btn-sm {% if filter_status == 'obsolete' %}btn-primary{% endif %}">Obsolete</a>
-    <a href="/projects/{{ project.slug }}/screens" class="btn btn-sm {% if not filter_status %}btn-primary{% endif %}">Tous</a>
+    <a href="/projects/{{ project.slug }}/screens" class="btn btn-sm {% if not filter_status %}btn-primary{% endif %}">All</a>
   </div>
 </div>
 
 {% if not screens %}
 <div class="empty-state">
-  <h3>Aucun ecran</h3>
-  <p>Lancez un run pour importer les ecrans Figma.</p>
+  <h3>No screens</h3>
+  <p>Run an audit to import the Figma screens.</p>
 </div>
 {% else %}
 <div class="screen-grid">
@@ -27,7 +27,7 @@
     <img src="/files/{{ project.slug }}/{{ s.image_path }}" alt="{{ s.name }}" loading="lazy">
     {% else %}
     <div style="height: 220px; background: var(--surface2); display: flex; align-items: center; justify-content: center;">
-      <span class="text-muted text-sm">Pas d'image</span>
+      <span class="text-muted text-sm">No image</span>
     </div>
     {% endif %}
     <div class="screen-info">
@@ -52,7 +52,7 @@
                 hx-post="/htmx/projects/{{ project.slug }}/screens/{{ s.id }}/status/current"
                 hx-target="#screen-{{ s.id }}"
                 hx-swap="outerHTML">
-          Restaurer
+          Restore
         </button>
         {% endif %}
       </div>

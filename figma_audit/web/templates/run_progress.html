@@ -1,6 +1,6 @@
 <div id="run-progress" {% if polling %}hx-get="/htmx/projects/{{ slug }}/runs/{{ run_id }}/progress" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
   <div class="card">
-    <h3>Progression</h3>
+    <h3>Progress</h3>
     <div style="margin-top: 0.75rem;">
       {% for phase in phases %}
       <div class="flex items-center gap-2 mb-1">
@@ -53,7 +53,7 @@
 
     {% if run_error %}
     <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--critical-bg); border: 1px solid var(--critical); border-radius: 8px;">
-      <div style="color: var(--critical); font-weight: 600; margin-bottom: 0.25rem;">Erreur</div>
+      <div style="color: var(--critical); font-weight: 600; margin-bottom: 0.25rem;">Error</div>
       <div class="text-sm" style="color: var(--critical); white-space: pre-wrap;">{{ run_error }}</div>
     </div>
     {% endif %}
@@ -64,13 +64,13 @@
     {% endfor %}
     {% if ns.total_cost > 0 %}
     <div class="text-xs text-muted mt-1" style="padding-left: 28px;">
-      Cout cumule: <strong>~${{ "%.3f" | format(ns.total_cost) }}</strong>
+      Cumulative cost: <strong>~${{ "%.3f" | format(ns.total_cost) }}</strong>
     </div>
     {% endif %}
 
     {% if polling %}
     <div class="text-xs text-muted mt-2" style="padding-left: 28px;">
-      Temps ecoule: <span id="elapsed-timer"></span>
+      Elapsed time: <span id="elapsed-timer"></span>
     </div>
     <script>
       (function() {
@@ -92,7 +92,7 @@
     </script>
     {% elif elapsed %}
     <div class="text-xs text-muted mt-2" style="padding-left: 28px;">
-      Duree totale: {% if elapsed >= 60 %}{{ (elapsed // 60) | int }}m{{ "%02d" | format((elapsed % 60) | int) }}s{% else %}{{ "%.0f" | format(elapsed) }}s{% endif %}
+      Total duration: {% if elapsed >= 60 %}{{ (elapsed // 60) | int }}m{{ "%02d" | format((elapsed % 60) | int) }}s{% else %}{{ "%.0f" | format(elapsed) }}s{% endif %}
     </div>
     {% endif %}
   </div>

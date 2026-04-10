@@ -20,9 +20,9 @@ def check_playwright_browser() -> bool:
         if (d / "INSTALLATION_COMPLETE").exists():
             return True
 
-    console.print("[red]Chromium n'est pas installe pour Playwright.[/red]")
+    console.print("[red]Chromium is not installed for Playwright.[/red]")
     console.print(
-        "Lancez: [bold]figma-audit setup[/bold] ou [bold]playwright install chromium[/bold]"
+        "Run: [bold]figma-audit setup[/bold] or [bold]playwright install chromium[/bold]"
     )
     return False
 
@@ -41,8 +41,8 @@ def check_api_keys() -> bool:
             if line.startswith("ANTHROPIC_API_KEY=") and len(line) > 20:
                 return True
 
-    console.print("[red]ANTHROPIC_API_KEY non configuree.[/red]")
-    console.print("Lancez: [bold]figma-audit setup[/bold] ou exportez ANTHROPIC_API_KEY")
+    console.print("[red]ANTHROPIC_API_KEY not configured.[/red]")
+    console.print("Run: [bold]figma-audit setup[/bold] or export ANTHROPIC_API_KEY")
     return False
 
 

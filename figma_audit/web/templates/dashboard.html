@@ -4,45 +4,45 @@
 {% block content %}
 <div class="page-header">
   <h2>Dashboard</h2>
-  <p class="subtitle">{{ projects | length }} projet(s)</p>
+  <p class="subtitle">{{ projects | length }} project(s)</p>
 </div>
 
 {% if not projects %}
 <div class="empty-state">
-  <h3>Aucun projet</h3>
-  <p>Creez votre premier projet pour lancer un audit.</p>
-  <a href="/projects/new" class="btn btn-primary mt-2">Nouveau projet</a>
+  <h3>No projects</h3>
+  <p>Create your first project to start an audit.</p>
+  <a href="/projects/new" class="btn btn-primary mt-2">New project</a>
 </div>
 {% else %}
 
 <div class="stats-grid">
   <div class="stat-card">
     <div class="stat-value">{{ projects | length }}</div>
-    <div class="stat-label">Projets</div>
+    <div class="stat-label">Projects</div>
   </div>
   <div class="stat-card">
     <div class="stat-value">{{ total_runs }}</div>
-    <div class="stat-label">Runs total</div>
+    <div class="stat-label">Total runs</div>
   </div>
   <div class="stat-card stat-critical">
     <div class="stat-value">{{ total_critical }}</div>
-    <div class="stat-label">Critical ouverts</div>
+    <div class="stat-label">Open critical</div>
   </div>
   <div class="stat-card stat-good">
     <div class="stat-value">{{ total_fixed }}</div>
-    <div class="stat-label">Corriges</div>
+    <div class="stat-label">Fixed</div>
   </div>
 </div>
 
 <div class="card">
-  <h3>Projets</h3>
+  <h3>Projects</h3>
   <table>
     <thead>
       <tr>
-        <th>Projet</th>
+        <th>Project</th>
         <th>App URL</th>
-        <th>Dernier run</th>
-        <th>Statut</th>
+        <th>Last run</th>
+        <th>Status</th>
         <th></th>
       </tr>
     </thead>
@@ -51,7 +51,7 @@
       <tr>
         <td><a href="/projects/{{ p.slug }}" style="color: var(--accent); text-decoration: none; font-weight: 600;">{{ p.name }}</a></td>
         <td class="text-sm mono text-muted">{{ p.app_url or '-' }}</td>
-        <td class="text-sm text-muted">{{ p.last_run_date or 'Jamais' }}</td>
+        <td class="text-sm text-muted">{{ p.last_run_date or 'Never' }}</td>
         <td>
           {% if p.last_run_status %}
           <span class="badge badge-{{ p.last_run_status }}">{{ p.last_run_status }}</span>
@@ -59,7 +59,7 @@
           <span class="badge badge-pending">-</span>
           {% endif %}
         </td>
-        <td><a href="/projects/{{ p.slug }}" class="btn btn-sm">Voir</a></td>
+        <td><a href="/projects/{{ p.slug }}" class="btn btn-sm">View</a></td>
       </tr>
       {% endfor %}
     </tbody>

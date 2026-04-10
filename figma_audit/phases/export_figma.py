@@ -293,7 +293,7 @@ def run(
         save_cache(file_data, file_json_path)
         console.print(f"[green]Parsed file tree saved to {file_json_path}[/green]")
     elif offline:
-        console.print("[bold]Mode offline — utilisation du cache local.[/bold]")
+        console.print("[bold]Offline mode — using local cache.[/bold]")
         if not file_json_path.exists():
             raise FileNotFoundError(
                 f"No cached file.json at {file_json_path}. Run without --offline first."

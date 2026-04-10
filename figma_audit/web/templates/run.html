@@ -12,7 +12,7 @@
 
 {% if run.error %}
 <div class="card" style="border-color: var(--critical);">
-  <h3 style="color: var(--critical);">Erreur</h3>
+  <h3 style="color: var(--critical);">Error</h3>
   <pre class="text-sm" style="color: var(--critical); white-space: pre-wrap;">{{ run.error }}</pre>
 </div>
 {% endif %}
@@ -25,17 +25,17 @@
   {% if stats.captures_failed %}
   <div class="stat-card stat-warning">
     <div class="stat-value" style="color: #f59e0b;">{{ stats.captures_failed }}</div>
-    <div class="stat-label">Echecs nav.</div>
+    <div class="stat-label">Nav. failures</div>
   </div>
   {% endif %}
   <div class="stat-card">
     <div class="stat-value">{{ stats.total_discrepancies }}</div>
-    <div class="stat-label">Ecarts actifs</div>
+    <div class="stat-label">Active discrepancies</div>
   </div>
   {% if stats.n_dismissed %}
   <div class="stat-card">
     <div class="stat-value" style="color: var(--text-muted);">{{ stats.n_dismissed }}</div>
-    <div class="stat-label">Ignores</div>
+    <div class="stat-label">Dismissed</div>
   </div>
   {% endif %}
   <div class="stat-card stat-critical">
@@ -53,29 +53,29 @@
   {% if execution and execution.total_cost %}
   <div class="stat-card">
     <div class="stat-value">~${{ "%.2f" | format(execution.total_cost) }}</div>
-    <div class="stat-label">Cout API</div>
+    <div class="stat-label">API Cost</div>
   </div>
   {% endif %}
 </div>
 
 {% if run.status == 'running' %}
 <div hx-get="/htmx/projects/{{ project.slug }}/runs/{{ run.id }}/progress" hx-trigger="load, every 3s" hx-swap="innerHTML">
-  <div class="card"><p class="text-muted">Chargement de la progression...</p></div>
+  <div class="card"><p class="text-muted">Loading progress...</p></div>
 </div>
 {% endif %}
 
 {% if execution and execution.phases and run.status != 'running' %}
 <div class="card mb-2">
-  <h3>Details d'execution</h3>
+  <h3>Execution details</h3>
   <table>
     <thead>
       <tr>
         <th></th>
         <th>Phase</th>
-        <th>Duree</th>
+        <th>Duration</th>
         <th>Detail</th>
         <th style="text-align: right;">Tokens</th>
-        <th style="text-align: right;">Cout</th>
+        <th style="text-align: right;">Cost</th>
       </tr>
     </thead>
     <tbody>
@@ -132,15 +132,15 @@
 
 {% if failed_captures %}
 <div class="card mb-2" style="border-color: #f59e0b;">
-  <h3 style="color: #f59e0b;">Echecs de navigation ({{ failed_captures | length }})</h3>
+  <h3 style="color: #f59e0b;">Navigation failures ({{ failed_captures | length }})</h3>
   <p class="text-sm text-muted" style="margin-bottom: 0.75rem;">
-    Ces pages n'ont pas pu etre capturees correctement. Les screenshots etaient identiques
-    a ceux d'autres pages (redirection silencieuse vers login/home/splash) ou la navigation a leve une erreur.
-    Phase 5 ne les compare pas — les ecrans Figma associes resteront sans verification.
+    These pages could not be captured correctly. The screenshots were identical
+    to those of other pages (silent redirect to login/home/splash) or the navigation raised an error.
+    Phase 5 does not compare them — the associated Figma screens will remain unverified.
   </p>
   <table>
     <thead>
-      <tr><th>Page ID</th><th>Route</th><th>URL testee</th><th>Cause</th></tr>
+      <tr><th>Page ID</th><th>Route</th><th>Tested URL</th><th>Cause</th></tr>
     </thead>
     <tbody>
       {% for fc in failed_captures %}
@@ -152,7 +152,7 @@
         </td>
         <td class="text-sm" style="color: #f59e0b;">
           {% if fc.is_duplicate %}
-            <strong>Redirection silencieuse</strong> &mdash; {{ fc.error }}
+            <strong>Silent redirect</strong> &mdash; {{ fc.error }}
           {% else %}
             {{ fc.error }}
           {% endif %}
@@ -169,10 +169,10 @@
 
 {% if valid_comparisons %}
 <div class="card mb-2">
-  <h3>Comparaisons par ecran ({{ valid_comparisons | length }})</h3>
+  <h3>Comparisons by screen ({{ valid_comparisons | length }})</h3>
   <table>
     <thead>
-      <tr><th>Ecran Figma</th><th>Page</th><th>Ecarts</th><th>Fidelite</th><th></th></tr>
+      <tr><th>Figma screen</th><th>Page</th><th>Discrepancies</th><th>Fidelity</th><th></th></tr>
     </thead>
     <tbody>
       {% for comp in valid_comparisons %}
@@ -183,9 +183,9 @@
         <td><span class="fidelity-badge fidelity-{{ comp.fidelity }}">{{ comp.fidelity }}</span></td>
         <td>
           {% if comp.has_image %}
-          <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ comp.page_id }}{% if comp.screen_id %}?screen_id={{ comp.screen_id }}{% endif %}" class="btn btn-sm">Comparer</a>
+          <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ comp.page_id }}{% if comp.screen_id %}?screen_id={{ comp.screen_id }}{% endif %}" class="btn btn-sm">Compare</a>
           {% else %}
-          <span class="text-xs text-muted">Pas d'image Figma</span>
+          <span class="text-xs text-muted">No Figma image</span>
           {% endif %}
         </td>
       </tr>
@@ -197,22 +197,22 @@
 
 {% if mismatch_comparisons %}
 <div class="card mb-2">
-  <h3 style="color: #f59e0b;">Ecrans non compares ({{ mismatch_comparisons | length }})</h3>
+  <h3 style="color: #f59e0b;">Uncompared screens ({{ mismatch_comparisons | length }})</h3>
   <p class="text-sm text-muted" style="margin-bottom:0.75rem;">
-    Ces ecrans Figma n'ont pas pu etre compares — mauvais matching, etat non capture, ou erreur de page.
+    These Figma screens could not be compared — wrong matching, uncaptured state, or page error.
   </p>
   <table>
     <thead>
-      <tr><th>Ecran Figma</th><th>Page associee</th><th>Diagnostic</th><th></th></tr>
+      <tr><th>Figma screen</th><th>Associated page</th><th>Diagnostic</th><th></th></tr>
     </thead>
     <tbody>
       {% for comp in mismatch_comparisons %}
       <tr>
         <td>{{ comp.screen_name }}</td>
         <td class="mono text-sm">{{ comp.page_id }}</td>
-        <td class="text-sm" style="color: #f59e0b;">{{ comp.mismatch_reason or 'Ecrans differents' }}</td>
+        <td class="text-sm" style="color: #f59e0b;">{{ comp.mismatch_reason or 'Different screens' }}</td>
         <td>
-          <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ comp.page_id }}{% if comp.screen_id %}?screen_id={{ comp.screen_id }}{% endif %}" class="btn btn-sm">Voir</a>
+          <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ comp.page_id }}{% if comp.screen_id %}?screen_id={{ comp.screen_id }}{% endif %}" class="btn btn-sm">View</a>
         </td>
       </tr>
       {% endfor %}
@@ -224,23 +224,23 @@
 {% if discrepancies %}
 <div class="card">
   <div class="flex justify-between items-center mb-1">
-    <h3>Ecarts ({{ discrepancies | length }})</h3>
+    <h3>Discrepancies ({{ discrepancies | length }})</h3>
     <div class="flex gap-1">
       <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity=critical&status={{ filter_status or '' }}" class="btn btn-sm {% if filter_severity == 'critical' %}btn-primary{% endif %}">Critical</a>
       <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity=important&status={{ filter_status or '' }}" class="btn btn-sm {% if filter_severity == 'important' %}btn-primary{% endif %}">Important</a>
-      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?status={{ filter_status or '' }}" class="btn btn-sm {% if not filter_severity %}btn-primary{% endif %}">Toutes severites</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?status={{ filter_status or '' }}" class="btn btn-sm {% if not filter_severity %}btn-primary{% endif %}">All severities</a>
       <span style="border-left: 1px solid var(--border); margin: 0 0.25rem;"></span>
       <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=open" class="btn btn-sm {% if filter_status == 'open' %}btn-primary{% endif %}">Open</a>
       <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=fixed" class="btn btn-sm {% if filter_status == 'fixed' %}btn-primary{% endif %}">Fixed</a>
-      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=ignored" class="btn btn-sm {% if filter_status == 'ignored' %}btn-primary{% endif %}">Ignores/Won't fix</a>
-      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}" class="btn btn-sm {% if not filter_status %}btn-primary{% endif %}">Actifs</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}&status=ignored" class="btn btn-sm {% if filter_status == 'ignored' %}btn-primary{% endif %}">Ignored/Won't fix</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}?severity={{ filter_severity or '' }}" class="btn btn-sm {% if not filter_status %}btn-primary{% endif %}">Active</a>
     </div>
   </div>
 
   {% for d in discrepancies %}
   <div class="discrepancy {{ d.severity }}" id="disc-{{ d.id }}">
     <div class="discrepancy-header">
-      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ d.page_id }}" class="text-xs mono" style="color: var(--text-muted); text-decoration: none;" title="Voir la comparaison">{{ d.category }} - {{ d.page_id }} ({{ d.route }})</a>
+      <a href="/projects/{{ project.slug }}/runs/{{ run.id }}/compare/{{ d.page_id }}" class="text-xs mono" style="color: var(--text-muted); text-decoration: none;" title="View comparison">{{ d.category }} - {{ d.page_id }} ({{ d.route }})</a>
       <div class="flex gap-1 items-center">
         <span class="badge badge-{{ d.status }}">{{ d.status }}</span>
         <span class="badge badge-{{ d.severity }}">{{ d.severity }}</span>
@@ -255,9 +255,9 @@
     {% endif %}
     {% if d.status == 'open' %}
     <div class="discrepancy-actions">
-      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/ignored" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Ignorer</button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/ignored" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Ignore</button>
       <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/wontfix" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Won't fix</button>
-      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/fixed" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Corrige</button>
+      <button class="btn btn-sm" hx-post="/htmx/projects/{{ project.slug }}/discrepancies/{{ d.id }}/status/fixed" hx-target="#disc-{{ d.id }}" hx-swap="outerHTML">Fixed</button>
     </div>
     {% endif %}
   </div>

@@ -16,7 +16,7 @@ from figma_audit.utils.claude_client import ClaudeClient
 console = Console()
 
 SUMMARY_SYSTEM_PROMPT = """\
-You are a UI/UX audit report writer. Generate an executive summary in French for a Figma \
+You are a UI/UX audit report writer. Generate an executive summary in English for a Figma \
 design conformity audit. Be concise (3-5 sentences), highlight the most important findings, \
 and give actionable prioritized recommendations.
 
@@ -43,18 +43,21 @@ def _generate_executive_summary(
     for comp in comparisons:
         fidelity = comp.get("overall_fidelity", "?")
         n_disc = len(comp.get("discrepancies", []))
-        findings.append(f"- {comp['figma_screen']} ({comp['route']}): {fidelity}, {n_disc} ecarts")
+        findings.append(
+            f"- {comp['figma_screen']} ({comp['route']}): "
+            f"{fidelity}, {n_disc} discrepancies"
+        )
 
     stats = statistics
     prompt = (
-        f"Voici les resultats d'un audit de conformite Figma vs application deployee:\n\n"
-        f"Ecrans compares: {stats.get('total_screens', 0)}\n"
-        f"Total ecarts: {stats.get('total_discrepancies', 0)}\n"
+        f"Here are the results of a Figma vs deployed application conformity audit:\n\n"
+        f"Screens compared: {stats.get('total_screens', 0)}\n"
+        f"Total discrepancies: {stats.get('total_discrepancies', 0)}\n"
         f"Critical: {stats.get('by_severity', {}).get('critical', 0)}, "
         f"Important: {stats.get('by_severity', {}).get('important', 0)}, "
         f"Minor: {stats.get('by_severity', {}).get('minor', 0)}\n\n"
-        f"Detail par ecran:\n" + "\n".join(findings) + "\n\n"
-        "Categories les plus touchees: "
+        f"Detail per screen:\n" + "\n".join(findings) + "\n\n"
+        "Most affected categories: "
         + ", ".join(
             f"{k} ({v})"
             for k, v in sorted(
@@ -63,10 +66,10 @@ def _generate_executive_summary(
             )[:5]
         )
         + "\n\n"
-        "Note: plusieurs ecrans protegees par authentification "
-        "n'ont pas pu etre captures "
-        "(redirect vers welcome). Seuls les ecrans publics "
-        "ont ete compares reellement."
+        "Note: several screens protected by authentication "
+        "could not be captured "
+        "(redirect to welcome). Only public screens "
+        "were actually compared."
     )
 
     if api_key:
@@ -87,10 +90,10 @@ def _generate_executive_summary(
     total = stats.get("total_discrepancies", 0)
     critical = stats.get("by_severity", {}).get("critical", 0)
     return (
-        f"Audit de conformite sur {stats.get('total_screens', 0)} ecrans. "
-        f"{total} ecarts detectes dont {critical} critiques. "
-        f"La majorite des ecarts critiques proviennent des pages protegees par authentification "
-        f"qui n'ont pas pu etre capturees correctement."
+        f"Conformity audit on {stats.get('total_screens', 0)} screens. "
+        f"{total} discrepancies detected including {critical} critical. "
+        f"Most critical discrepancies come from authentication-protected pages "
+        f"that could not be captured correctly."
     )
 
 

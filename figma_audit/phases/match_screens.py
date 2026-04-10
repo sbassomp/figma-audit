@@ -28,23 +28,24 @@ You will receive:
 
 Your task: for each Figma screen, find the best matching route from the application.
 
-IMPORTANT - Comprendre les ecrans pre/post-login:
-- Les pages marquees "publique" (auth_required: false) sont des ecrans \
-visibles AVANT la connexion (splash, login, inscription, onboarding).
-- Les pages marquees "auth requise" ne sont visibles qu'APRES connexion.
-- Un ecran Figma de type splash/onboarding/welcome doit correspondre a une \
-route publique, PAS a une route authentifiee montrant des donnees.
-- Si un ecran Figma montre clairement un contenu de type liste/dashboard/donnees, \
-il correspond a une route authentifiee, pas au splash.
+IMPORTANT - Understanding pre/post-login screens:
+- Pages marked "public" (auth_required: false) are screens \
+visible BEFORE login (splash, login, registration, onboarding).
+- Pages marked "auth required" are only visible AFTER login.
+- A Figma screen of type splash/onboarding/welcome must match a \
+public route, NOT an authenticated route showing data.
+- If a Figma screen clearly shows list/dashboard/data content, \
+it matches an authenticated route, not the splash.
 
-IMPORTANT - Ecrans a plusieurs etats:
-- Un meme ecran Figma peut correspondre a un ETAT SPECIFIQUE d'une page \
-(ex: un ecran avec un theme sombre = variante visuelle de la meme page).
-- Si une page a des "etats capturables" (capturable_states), identifie a quel \
-etat specifique correspond chaque ecran Figma et renseigne le champ state_id \
-avec l'identifiant exact (ex: "step_2_addresses"). \
-Si l'ecran correspond a l'etat initial (premiere etape), met state_id au premier etat capturable. \
-Si aucun etat capturable ne correspond, met state_id a null.
+IMPORTANT - Multi-state screens:
+- A single Figma screen may correspond to a SPECIFIC STATE of a page \
+(e.g. a screen with a dark theme = visual variant of the same page).
+- If a page has "capturable states" (capturable_states), identify which \
+specific state each Figma screen corresponds to and fill in the state_id \
+field with the exact identifier (e.g. "step_2_addresses"). \
+If the screen corresponds to the initial state (first step), set state_id \
+to the first capturable state. \
+If no capturable state matches, set state_id to null.
 
 Rules:
 - Match based on visual content, screen name, route description, AND page context \
@@ -53,7 +54,7 @@ Rules:
 - Some routes may match multiple Figma screens (different states of the same page)
 - Set confidence: 0.9+ = very certain, 0.7-0.9 = likely, 0.5-0.7 = uncertain, <0.5 = guess
 - Set route to null if no good match exists
-- Write notes in French explaining the match rationale, including which visual state matches
+- Write notes in English explaining the match rationale, including which visual state matches
 - Output ONLY valid JSON, no markdown, no commentary
 
 JSON Schema:
@@ -66,7 +67,7 @@ JSON Schema:
       "page_id": "page_id or null",
       "state_id": "capturable_state_id or null",
       "confidence": 0.95,
-      "notes": "Raison du matching en français"
+      "notes": "Match rationale in English"
     }
   ]
 }
@@ -75,13 +76,13 @@ JSON Schema:
 
 def _build_routes_description(pages_manifest: dict) -> str:
     """Build a rich text description of all routes from the pages manifest."""
-    lines = ["## Routes de l'application\n"]
+    lines = ["## Application Routes\n"]
     for page in pages_manifest.get("pages", []):
         auth_required = page.get("auth_required", False)
         if auth_required:
-            auth = "auth requise — visible apres connexion"
+            auth = "auth required — visible after login"
         else:
-            auth = "publique — visible AVANT login"
+            auth = "public — visible BEFORE login"
 
         desc = page.get("description", "")
         fields = page.get("form_fields", [])
@@ -96,36 +97,36 @@ def _build_routes_description(pages_manifest: dict) -> str:
             state_desc = req_state.get("description", "")
             deps = req_state.get("data_dependencies", [])
             if state_desc:
-                lines.append(f"  Prerequis: {state_desc}")
+                lines.append(f"  Prerequisites: {state_desc}")
             if deps:
-                lines.append(f"  Donnees requises: {', '.join(deps)}")
+                lines.append(f"  Required data: {', '.join(deps)}")
 
         if fields:
             field_descs = [
                 f"{f['name']} ({f.get('type', '?')})"
-                + (f" etape {f['step']}" if f.get("step") else "")
+                + (f" step {f['step']}" if f.get("step") else "")
                 for f in fields
             ]
-            lines.append(f"  Champs de formulaire: {', '.join(field_descs)}")
+            lines.append(f"  Form fields: {', '.join(field_descs)}")
 
         if params:
             param_descs = [
                 f":{p['name']} ({p.get('type', 'string')}"
-                + (", optionnel" if p.get("optional") else "")
+                + (", optional" if p.get("optional") else "")
                 + ")"
                 for p in params
             ]
-            lines.append(f"  Parametres URL: {', '.join(param_descs)}")
+            lines.append(f"  URL parameters: {', '.join(param_descs)}")
 
         if states:
-            lines.append(f"  Etats visuels: {', '.join(states)}")
+            lines.append(f"  Visual states: {', '.join(states)}")
 
         capturable = page.get("capturable_states", [])
         if capturable:
             cap_descs = [
                 f"{cs['state_id']}: {cs.get('description', '')}" for cs in capturable
             ]
-            lines.append(f"  Etats capturables (dans l'ordre): {'; '.join(cap_descs)}")
+            lines.append(f"  Capturable states (in order): {'; '.join(cap_descs)}")
 
         lines.append("")
 
@@ -134,7 +135,7 @@ def _build_routes_description(pages_manifest: dict) -> str:
 
 def _build_screens_text(screens: list[dict]) -> str:
     """Build a text list of Figma screens (for screens without images)."""
-    lines = ["## Écrans Figma (sans image disponible)\n"]
+    lines = ["## Figma Screens (no image available)\n"]
     for s in screens:
         lines.append(f"- **{s['name']}** (id: `{s['id']}`, {s['width']:.0f}x{s['height']:.0f})")
     return "\n".join(lines)
@@ -187,7 +188,7 @@ def run(config: Config) -> Path:
         screens = [s for s in screens if s["id"] not in obsolete_ids]
         n_excluded = before - len(screens)
         if n_excluded:
-            console.print(f"  [dim]{n_excluded} ecran(s) obsolete(s) exclus du matching[/dim]")
+            console.print(f"  [dim]{n_excluded} obsolete screen(s) excluded from matching[/dim]")
 
     n_screens = len(screens)
     n_routes = len(pages_manifest.get("pages", []))
@@ -234,7 +235,7 @@ def run(config: Config) -> Path:
                 )
 
             image_paths = []
-            screen_list_text = "## Écrans Figma dans ce batch\n\n"
+            screen_list_text = "## Figma Screens in this batch\n\n"
             for s in batch:
                 img_path = output_dir / s["image_path"]
                 image_paths.append(img_path)
@@ -246,8 +247,8 @@ def run(config: Config) -> Path:
             user_prompt = (
                 f"{routes_text}\n\n"
                 f"{screen_list_text}\n\n"
-                "Les images ci-dessus correspondent aux écrans Figma listés, dans l'ordre. "
-                "Pour chaque écran, trouve la route correspondante dans l'application."
+                "The images above correspond to the listed Figma screens, in order. "
+                "For each screen, find the matching route in the application."
             )
 
             result = client.analyze_with_images(
@@ -267,9 +268,9 @@ def run(config: Config) -> Path:
         user_prompt = (
             f"{routes_text}\n\n"
             f"{screens_text}\n\n"
-            "Pour chaque écran Figma listé ci-dessus (sans image disponible), "
-            "trouve la route correspondante en te basant uniquement sur le nom de l'écran. "
-            "Indique une confiance plus basse car le matching est fait sans image."
+            "For each Figma screen listed above (no image available), "
+            "find the matching route based solely on the screen name. "
+            "Indicate a lower confidence since matching is done without an image."
         )
 
         result = client.analyze(

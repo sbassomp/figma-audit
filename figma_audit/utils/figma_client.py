@@ -51,8 +51,8 @@ class FigmaClient:
             if resp.status_code == 429:
                 retry_after = int(resp.headers.get("Retry-After", self.config.retry_wait_default))
                 console.print(
-                    f"[yellow]Rate limited (429). Attente {retry_after}s "
-                    f"(tentative {attempt}/{self.config.max_retries})[/yellow]"
+                    f"[yellow]Rate limited (429). Waiting {retry_after}s "
+                    f"(attempt {attempt}/{self.config.max_retries})[/yellow]"
                 )
                 time.sleep(retry_after)
                 continue
@@ -60,7 +60,7 @@ class FigmaClient:
             if resp.status_code >= 500 and attempt < self.config.max_retries:
                 wait = self.config.retry_wait_default * attempt
                 console.print(
-                    f"[yellow]Erreur serveur {resp.status_code}. Retry dans {wait}s[/yellow]"
+                    f"[yellow]Server error {resp.status_code}. Retrying in {wait}s[/yellow]"
                 )
                 time.sleep(wait)
                 continue

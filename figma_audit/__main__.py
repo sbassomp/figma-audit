@@ -418,8 +418,8 @@ def run(
             if manifest_path.exists() and from_phase != "analyze":
                 n_pages = _count_pages(cfg)
                 console.print(
-                    f"  [dim]Manifest existant ({n_pages} pages) "
-                    f"— skip (utiliser --from analyze pour forcer)[/dim]"
+                    f"  [dim]Existing manifest ({n_pages} pages) "
+                    f"— skip (use --from analyze to force)[/dim]"
                 )
                 progress.finish_phase(detail=f"{n_pages} pages (cached)")
             else:
@@ -438,7 +438,7 @@ def run(
 
             run_figma(cfg, offline=offline, target_page=target_page)
             screens = _count_screens(cfg)
-            progress.finish_phase(detail=f"{screens} ecrans")
+            progress.finish_phase(detail=f"{screens} screens")
 
         elif phase_name == "match":
             import yaml
@@ -454,8 +454,8 @@ def run(
                         1 for m in existing.get("mappings", []) if m.get("route")
                     )
                     console.print(
-                        f"  [dim]Mapping existant ({matched} matches, verified) "
-                        f"— skip (utiliser --from match pour forcer)[/dim]"
+                        f"  [dim]Existing mapping ({matched} matches, verified) "
+                        f"— skip (use --from match to force)[/dim]"
                     )
                     progress.finish_phase(detail=f"{matched} matches (cached)")
                     continue
@@ -499,7 +499,7 @@ def run(
             client = _get_last_client("compare")
             discs = _count_discrepancies(cfg)
             progress.finish_phase(
-                detail=f"{discs} ecarts",
+                detail=f"{discs} discrepancies",
                 cost=client.usage.cost(client.model) if client else 0,
                 tokens=client.usage.total_tokens if client else 0,
             )
@@ -608,7 +608,7 @@ def setup() -> None:
     db_path = config_dir / "figma-audit.db"
 
     # ── Step 1: API Keys ──────────────────────────────────────────
-    console.print("[bold]1. Cles API[/bold]")
+    console.print("[bold]1. API Keys[/bold]")
     existing_env = {}
     if env_file.exists():
         for line in env_file.read_text().splitlines():
@@ -619,33 +619,33 @@ def setup() -> None:
     anthropic_key = existing_env.get("ANTHROPIC_API_KEY", os.environ.get("ANTHROPIC_API_KEY", ""))
     figma_token = existing_env.get("FIGMA_TOKEN", os.environ.get("FIGMA_TOKEN", ""))
 
-    api_status = "[green]configure[/green]" if anthropic_key else "[red]manquante[/red]"
-    figma_status = "[green]configure[/green]" if figma_token else "[red]manquante[/red]"
+    api_status = "[green]configured[/green]" if anthropic_key else "[red]missing[/red]"
+    figma_status = "[green]configured[/green]" if figma_token else "[red]missing[/red]"
     console.print(f"  ANTHROPIC_API_KEY: {api_status}")
     console.print(f"  FIGMA_TOKEN:       {figma_status}")
 
     if not anthropic_key or click.confirm(
-        "  Modifier ANTHROPIC_API_KEY ?", default=not anthropic_key
+        "  Update ANTHROPIC_API_KEY?", default=not anthropic_key
     ):
         anthropic_key = click.prompt("  ANTHROPIC_API_KEY", default=anthropic_key)
 
-    if not figma_token or click.confirm("  Modifier FIGMA_TOKEN ?", default=not figma_token):
+    if not figma_token or click.confirm("  Update FIGMA_TOKEN?", default=not figma_token):
         figma_token = click.prompt("  FIGMA_TOKEN", default=figma_token)
 
     env_content = f"ANTHROPIC_API_KEY={anthropic_key}\nFIGMA_TOKEN={figma_token}\n"
     env_file.write_text(env_content)
     env_file.chmod(0o600)
-    console.print(f"  [green]Cles sauvegardees dans {env_file}[/green]\n")
+    console.print(f"  [green]Keys saved to {env_file}[/green]\n")
 
     # ── Step 2: Database ──────────────────────────────────────────
-    console.print("[bold]2. Base de donnees[/bold]")
+    console.print("[bold]2. Database[/bold]")
     from figma_audit.db.engine import init_db
 
     init_db(str(db_path))
-    console.print(f"  [green]DB initialisee: {db_path}[/green]\n")
+    console.print(f"  [green]DB initialized: {db_path}[/green]\n")
 
     # ── Step 3: Playwright ────────────────────────────────────────
-    console.print("[bold]3. Navigateur (Playwright)[/bold]")
+    console.print("[bold]3. Browser (Playwright)[/bold]")
     try:
         result = subprocess.run(
             [sys.executable, "-m", "playwright", "install", "chromium"],
@@ -653,33 +653,33 @@ def setup() -> None:
             timeout=120,
         )
         if result.returncode == 0:
-            console.print("  [green]Chromium installe[/green]\n")
+            console.print("  [green]Chromium installed[/green]\n")
         else:
-            console.print("  [yellow]Chromium deja installe ou erreur (non bloquant)[/yellow]\n")
+            console.print("  [yellow]Chromium already installed or error (non-blocking)[/yellow]\n")
     except Exception as e:
-        console.print(f"  [yellow]Impossible d'installer Chromium: {e}[/yellow]\n")
+        console.print(f"  [yellow]Could not install Chromium: {e}[/yellow]\n")
 
     # ── Step 4: Daemon systemd ────────────────────────────────────
-    console.print("[bold]4. Daemon (service systeme)[/bold]")
+    console.print("[bold]4. Daemon (system service)[/bold]")
     system = platform.system()
 
     if system == "Linux" and _has_systemd():
-        if click.confirm("  Installer figma-audit comme service systemd ?", default=True):
+        if click.confirm("  Install figma-audit as a systemd service?", default=True):
             _install_systemd_service(env_file, db_path)
     elif system == "Darwin":
-        if click.confirm("  Installer figma-audit comme service launchd ?", default=True):
+        if click.confirm("  Install figma-audit as a launchd service?", default=True):
             _install_launchd_service(env_file, db_path)
     else:
         console.print(
-            "  [dim]Pas de gestionnaire de service detecte. Utilisez 'figma-audit serve'.[/dim]"
+            "  [dim]No service manager detected. Use 'figma-audit serve'.[/dim]"
         )
 
     # ── Done ──────────────────────────────────────────────────────
-    console.print("\n[bold green]Setup termine ![/bold green]")
+    console.print("\n[bold green]Setup complete![/bold green]")
     console.print(f"  Config:    {config_dir}")
     console.print(f"  Database:  {db_path}")
     console.print("  Dashboard: http://127.0.0.1:8321")
-    console.print(f"\n  Pour lancer manuellement: figma-audit serve --db {db_path}")
+    console.print(f"\n  To run manually: figma-audit serve --db {db_path}")
 
 
 def _has_systemd() -> bool:
@@ -732,13 +732,13 @@ WantedBy=default.target
         import getpass
 
         subprocess.run(["loginctl", "enable-linger", getpass.getuser()], capture_output=True)
-        console.print("  [green]Service installe et demarre[/green]")
+        console.print("  [green]Service installed and started[/green]")
         console.print("  [dim]  systemctl --user status figma-audit[/dim]")
         console.print("  [dim]  systemctl --user stop figma-audit[/dim]")
         console.print("  [dim]  journalctl --user -u figma-audit -f[/dim]")
     except subprocess.CalledProcessError as e:
-        console.print(f"  [red]Erreur systemd: {e}[/red]")
-        console.print(f"  [dim]Service ecrit dans {service_path}[/dim]")
+        console.print(f"  [red]systemd error: {e}[/red]")
+        console.print(f"  [dim]Service written to {service_path}[/dim]")
 
 
 def _install_launchd_service(env_file: Path, db_path: Path) -> None:
@@ -802,12 +802,12 @@ def _install_launchd_service(env_file: Path, db_path: Path) -> None:
     try:
         subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
         subprocess.run(["launchctl", "load", str(plist_path)], check=True, capture_output=True)
-        console.print("  [green]Service installe et demarre[/green]")
+        console.print("  [green]Service installed and started[/green]")
         console.print("  [dim]  launchctl list | grep figma-audit[/dim]")
         console.print(f"  [dim]  launchctl unload {plist_path}[/dim]")
     except subprocess.CalledProcessError as e:
-        console.print(f"  [red]Erreur launchd: {e}[/red]")
-        console.print(f"  [dim]Plist ecrit dans {plist_path}[/dim]")
+        console.print(f"  [red]launchd error: {e}[/red]")
+        console.print(f"  [dim]Plist written to {plist_path}[/dim]")
 
 
 if __name__ == "__main__":

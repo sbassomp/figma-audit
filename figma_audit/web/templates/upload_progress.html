@@ -34,7 +34,7 @@
 
       {% if error %}
       <div style="margin-top: 0.75rem; padding: 0.75rem; background: var(--critical-bg); border: 1px solid var(--critical); border-radius: 8px;">
-        <div style="color: var(--critical); font-weight: 600; margin-bottom: 0.25rem;">Erreur</div>
+        <div style="color: var(--critical); font-weight: 600; margin-bottom: 0.25rem;">Error</div>
         <div class="text-sm" style="color: var(--critical);">{{ error }}</div>
       </div>
       {% endif %}
@@ -42,7 +42,7 @@
 
     {% if done and not error %}
     <div style="margin-top: 0.75rem; padding: 0.75rem; background: #14532d; border: 1px solid var(--good); border-radius: 8px;">
-      <span style="color: #86efac;">Import termine. Redirection...</span>
+      <span style="color: #86efac;">Import complete. Redirecting...</span>
     </div>
     {% endif %}
   </div>

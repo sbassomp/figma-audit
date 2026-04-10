@@ -1,63 +1,63 @@
 {% extends "base.html" %}
-{% block title %}Nouveau projet - figma-audit{% endblock %}
+{% block title %}New project - figma-audit{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h2>Nouveau projet</h2>
-  <p class="subtitle">Configurez un projet a auditer</p>
+  <h2>New project</h2>
+  <p class="subtitle">Configure a project to audit</p>
 </div>
 
 <div class="card" style="max-width: 600px;">
   <form method="POST" action="/projects/new">
     <div class="form-group">
-      <label for="name">Nom du projet *</label>
+      <label for="name">Project name *</label>
       <input type="text" id="name" name="name" required placeholder="MedExchange">
     </div>
     <div class="form-group">
-      <label for="figma_url">URL Figma</label>
+      <label for="figma_url">Figma URL</label>
       <input type="url" id="figma_url" name="figma_url" placeholder="https://www.figma.com/design/...">
     </div>
     <div class="form-group">
-      <label for="app_url">URL de l'application</label>
+      <label for="app_url">Application URL</label>
       <input type="url" id="app_url" name="app_url" placeholder="https://myapp.example.com">
     </div>
     <div class="form-group">
-      <label for="project_path">Chemin du code source</label>
+      <label for="project_path">Source code path</label>
       <input type="text" id="project_path" name="project_path" placeholder="~/dev/myproject">
     </div>
     <div class="form-group">
-      <label for="output_dir">Repertoire de sortie</label>
+      <label for="output_dir">Output directory</label>
       <input type="text" id="output_dir" name="output_dir" value="./output" placeholder="./output">
     </div>
 
     <div style="border-top: 1px solid var(--border); margin: 1.5rem 0; padding-top: 1rem;">
-      <h3 style="font-size: 0.9rem; color: var(--accent); margin-bottom: 0.75rem;">Authentification de l'application</h3>
+      <h3 style="font-size: 0.9rem; color: var(--accent); margin-bottom: 0.75rem;">Application authentication</h3>
       <div class="form-group">
-        <label for="test_email">Email de connexion</label>
+        <label for="test_email">Login email</label>
         <input type="email" id="test_email" name="test_email" placeholder="test@example.com">
       </div>
       <div class="form-group">
-        <label for="test_otp">Code OTP</label>
+        <label for="test_otp">OTP code</label>
         <input type="text" id="test_otp" name="test_otp" value="1234" placeholder="1234">
       </div>
     </div>
 
     <div style="border-top: 1px solid var(--border); margin: 1.5rem 0; padding-top: 1rem;">
-      <h3 style="font-size: 0.9rem; color: var(--accent); margin-bottom: 0.75rem;">Donnees de test (optionnel)</h3>
+      <h3 style="font-size: 0.9rem; color: var(--accent); margin-bottom: 0.75rem;">Test data (optional)</h3>
       <div class="form-group">
-        <label for="seed_email">Email du compte de seed</label>
+        <label for="seed_email">Seed account email</label>
         <input type="email" id="seed_email" name="seed_email" placeholder="deposant@example.com">
-        <div class="text-xs text-muted" style="margin-top: 0.25rem;">Compte secondaire pour creer des donnees visibles par le compte principal</div>
+        <div class="text-xs text-muted" style="margin-top: 0.25rem;">Secondary account to create data visible to the main account</div>
       </div>
       <div class="form-group">
-        <label for="seed_otp">Code OTP du seed</label>
+        <label for="seed_otp">Seed OTP code</label>
         <input type="text" id="seed_otp" name="seed_otp" value="1234" placeholder="1234">
       </div>
     </div>
 
     <div class="flex gap-1 mt-2">
-      <button type="submit" class="btn btn-primary">Creer le projet</button>
-      <a href="/" class="btn">Annuler</a>
+      <button type="submit" class="btn btn-primary">Create project</button>
+      <a href="/" class="btn">Cancel</a>
     </div>
   </form>
 </div>

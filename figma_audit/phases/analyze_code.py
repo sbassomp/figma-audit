@@ -297,7 +297,7 @@ anything reading user-scoped data are almost always `auth_required: true`. \
 When in doubt because the router code is ambiguous, prefer `auth_required: true` \
 for any route that is NOT explicitly listed as a public route in the router.
 - For test_data: suggest realistic test values for forms \
-(French context: phone +33..., French addresses).
+(use plausible phone numbers, addresses, and names appropriate for the app's locale).
 - Extract design tokens from the theme/token files into a structured format.
 - For test_setup: analyze the API client/service files to find the EXACT endpoints, \
 HTTP methods, request payloads, and authentication flow used by the app. \
@@ -319,7 +319,7 @@ JSON Schema to follow:
       "name": "string (class/component name)",
       "file": "string (relative file path)",
       "auth_required": "boolean",
-      "description": "string (what the page does, in French)",
+      "description": "string (what the page does, in English)",
       "params": [{"name": "string", "type": "string", "optional": "boolean"}],
       "required_state": {
         "description": "string (what state/data is needed)",
@@ -337,7 +337,7 @@ JSON Schema to follow:
       "capturable_states": [
         {
           "state_id": "string (snake_case, matches an interactive_states entry)",
-          "description": "string (what is visible in this state, in French)",
+          "description": "string (what is visible in this state, in English)",
           "delta_steps": [
             {"action": "navigate|click|fill|wait|wait_for_url", "url?": "string", \
 "selector?": "string", "text?": "string", "value?": "string", "timeout?": "number"}

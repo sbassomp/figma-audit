@@ -102,8 +102,8 @@ class TestHtmxDiscrepancyStatus:
         # First check it's open and has buttons
         r = client.post(f"/htmx/projects/test/discrepancies/{disc_id}/status/open")
         assert r.status_code == 200
-        assert "Ignorer" in r.text
-        assert "Corrige" in r.text
+        assert "Ignore" in r.text
+        assert "Fixed" in r.text
 
     def test_ignored_has_no_action_buttons(self):
         fd, db = tempfile.mkstemp(suffix=".db")
@@ -123,7 +123,7 @@ class TestHtmxScreenStatus:
         r = client.post(f"/htmx/projects/test/screens/{sc_id}/status/obsolete")
         assert r.status_code == 200
         assert "badge-obsolete" in r.text
-        assert "Restaurer" in r.text
+        assert "Restore" in r.text
 
     def test_restore_current(self):
         fd, db = tempfile.mkstemp(suffix=".db")
