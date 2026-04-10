@@ -42,3 +42,4 @@ debug-*.png
 htmlcov/
 .coverage
 CLAUDE.md
+.claude-session.md

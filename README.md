@@ -32,8 +32,11 @@ The `setup` command guides you through the installation step by step:
 
 - Python 3.11+
 - An [Anthropic](https://console.anthropic.com/) account with an API key
-- A [Figma Personal Access](https://www.figma.com/developers/api#access-tokens) token
-- `pdftoppm` (`poppler-utils` package) for importing screens from a Figma Desktop export
+- Figma screens provided via **one** of the following (see [Providing Figma screens](#providing-figma-screens)):
+  - A `.fig` file (exported from Figma Desktop or downloaded from the Figma UI)
+  - A ZIP export from Figma Desktop (File > Export frames to PDF)
+  - A [Figma Personal Access Token](https://www.figma.com/developers/api#access-tokens) (online API — subject to rate limits)
+- `pdftoppm` (`poppler-utils` package) — only needed for ZIP imports
 
 ## Quick start
 
@@ -120,19 +123,49 @@ Each phase can be executed independently. Phases read from and write to the `--o
 | `figma-audit compare` | 5 | Screenshots + manifests | `discrepancies.json` |
 | `figma-audit report` | 6 | Discrepancies | `report.html` |
 
-### Utilities
+### Providing Figma screens
 
-| Command | Description |
-|---------|-------------|
-| `figma-audit import-screens export.zip` | Import screens from a Figma Desktop export (ZIP with PDFs) |
+There are three ways to feed Figma screens into figma-audit. The `.fig` file and ZIP import are **recommended** — they are faster, work offline, and avoid the Figma API rate limits entirely.
 
-### Figma phase options
+| Method | Command | Figma token needed? | Notes |
+|--------|---------|---------------------|-------|
+| **.fig file** (recommended) | `figma-audit figma --figma-file design.fig` | No | Fastest. Parses the binary file locally. Also uploadable from the dashboard. |
+| **ZIP export** | `figma-audit import-screens export.zip` | No | Export from Figma Desktop (File > Export). Contains PDFs converted to PNGs. Requires `pdftoppm`. |
+| **Figma API** | `figma-audit figma` | Yes | Downloads screens via REST API. Subject to strict rate limits (~30 req/min, cooldown up to 48h). |
+
+#### Using a .fig file
+
+Download the `.fig` from Figma (File > Save local copy), then either:
 
 ```bash
+# CLI
+figma-audit figma --figma-file design.fig --output ./output
+
+# Or via the dashboard: open the project page and use the "Upload .fig" button
+```
+
+#### Using a ZIP export
+
+In Figma Desktop, select the frames you want, then File > Export. This produces a ZIP containing one PDF per frame. Import it with:
+
+```bash
+figma-audit import-screens export.zip --output ./output
+```
+
+#### Using the Figma API
+
+Set `figma_url` and `figma_token` in your `figma-audit.yaml` or environment variables, then:
+
+```bash
+figma-audit figma --output ./output
+
+# Options
 figma-audit figma --offline          # Work only from local cache
 figma-audit figma --force-refresh    # Force re-download from API
 figma-audit figma --target-page "45:927"  # Limit to a specific Figma page
 ```
+
+See [Figma rate limiting](#figma-rate-limiting) for details on caching and rate limit management.
 
 ## Web dashboard
 
@@ -421,13 +454,17 @@ If after `_setup_test_data` runs, any `test_data` value still contains a marker 
 
 This is by design: **the tool refuses to lie about what it captured**. If you see a placeholder error, fix the matching `seed_items` entry — do not chase the symptom in the comparison view.
 
-## Figma rate limiting management
+## Figma rate limiting
 
-The Figma API enforces strict limits on image exports (~30 req/min, with a cooldown that can reach 48h if exceeded). Strategies:
+The Figma API enforces strict limits on image exports (~30 req/min, with a cooldown that can reach 48h if exceeded). **This is why `.fig` file and ZIP imports are recommended** — they bypass the API entirely.
 
-1. **Local cache**: the Figma file tree is downloaded once and cached in `figma_raw/file.json` (69 MB for a 77-screen file). Subsequent runs use the cache.
-2. **Offline mode**: `figma-audit figma --offline` works only from the cache.
-3. **Desktop import**: export from Figma Desktop (File > Export) and import with `figma-audit import-screens export.zip`. Completely bypasses the API rate limit.
+If you do use the API:
+
+1. **Local cache**: the Figma file tree is downloaded once and cached in `figma_raw/file.json` (69 MB for a 77-screen file). Subsequent runs use the cache automatically.
+2. **Offline mode**: `figma-audit figma --offline` works only from the cache — zero API calls.
+3. **Force refresh**: `figma-audit figma --force-refresh` re-downloads everything (use sparingly).
+
+If you hit the rate limit and get a 48h cooldown, switch to `.fig` file or ZIP import to keep working.
 
 ## Audit cost
 
