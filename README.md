@@ -1,19 +1,77 @@
 # figma-audit
 
-CLI tool + web dashboard for **semantic comparison** between Figma designs and a deployed web application.
+**Automated design conformity audits: compare your Figma designs against your deployed app and get a detailed discrepancy report.**
 
-Unlike visual regression tools (BackstopJS, Percy, Chromatic) that compare two versions of the same app against each other, figma-audit compares a **Figma design** against its **actual implementation** and produces a detailed discrepancy report.
+## The problem
+
+Your designer delivers pixel-perfect Figma mockups. Your developers implement them. But between the design and the deployed app, things drift: a button color is slightly off, a border-radius changes, spacing is inconsistent, an element is missing. These gaps accumulate silently and erode the user experience.
+
+Existing tools don't solve this:
+- **Visual regression tools** (BackstopJS, Percy, Chromatic, Applitools) compare two versions of the *same app* — they catch regressions but can't tell you if the implementation matches the *original design*.
+- **Manual review** works but doesn't scale: designers eyeball each screen, open Figma, compare side by side, file tickets. It takes hours and misses subtle differences.
+
+**figma-audit** fills this gap. It takes your Figma file, takes your deployed app URL, and produces a structured report of every discrepancy — automatically.
+
+## How it works
+
+figma-audit runs a 6-phase pipeline:
+
+```
+                    ┌─────────────┐
+  Source code ─────►│ 1. Analyze  │──► pages_manifest.json (routes, auth, params)
+                    └─────────────┘
+                    ┌─────────────┐
+  Figma file  ─────►│ 2. Export   │──► figma_manifest.json + screen PNGs
+                    └─────────────┘
+                    ┌─────────────┐
+  Manifests   ─────►│ 3. Match    │──► screen_mapping.yaml (Figma screen ↔ app route)
+                    └─────────────┘
+                    ┌─────────────┐
+  Live app URL ────►│ 4. Capture  │──► app screenshots + computed styles
+                    └─────────────┘
+                    ┌─────────────┐
+  Screenshots ─────►│ 5. Compare  │──► discrepancies.json (per-element diffs)
+                    └─────────────┘
+                    ┌─────────────┐
+  Discrepancies ───►│ 6. Report   │──► standalone HTML report
+                    └─────────────┘
+```
+
+Each phase reads from and writes to a shared output directory. You can re-run any phase independently, inspect intermediate results, and override AI decisions via YAML.
+
+**Phase 1** uses Claude AI to analyze your source code: it detects the framework (Flutter, React, Vue, Angular, Next.js), extracts every route, identifies auth guards, and generates test data setup instructions. An optional **agentic mode** lets Claude explore the codebase iteratively with tools for higher accuracy.
+
+**Phase 2** exports your Figma file — either from a `.fig` file (offline, recommended), a ZIP export, or the Figma REST API. Design tokens (colors, fonts, spacing, border-radius) are extracted alongside the screen images.
+
+**Phase 3** uses Claude Vision to match each Figma screen to its corresponding app route. The result is a human-reviewable YAML mapping that you can edit before proceeding.
+
+**Phase 4** launches a Playwright browser, authenticates, seeds test data via your app's API, and captures every mapped route. It handles Flutter CanvasKit apps, wizard multi-step flows, and detects silent navigation failures (redirects, placeholder URLs).
+
+**Phase 5** compares each Figma screen against its app screenshot using Claude Vision. It evaluates 9 categories: layout, colors, typography, components, text content, spacing, missing elements, added elements, and data gaps. Each discrepancy gets a severity (critical / important / minor) and a location on the screen.
+
+**Phase 6** generates a standalone HTML report with side-by-side screenshots, severity-coded discrepancy lists, and an executive summary.
+
+## Key advantages
+
+- **Semantic, not pixel-diff**: understands that a different person name is dynamic data (ignore it), but a different button color is a design gap (report it). No false positives from font rendering, anti-aliasing, or test data differences.
+- **End-to-end automated**: from Figma file to HTML report in one command. No manual screenshot-taking, no copy-pasting between tools.
+- **Works with any web framework**: Flutter (CanvasKit and HTML renderer), React, Vue, Angular, Next.js. The source code analysis adapts to each framework's routing conventions.
+- **Honest about failures**: when a page can't be captured (auth redirect, missing test data, signed URLs), the tool says so clearly instead of comparing garbage screenshots. The dashboard shows exactly what was tested and what failed.
+- **Human-in-the-loop where it matters**: the Figma-to-route mapping (Phase 3) is reviewable YAML. The test data setup can be overridden in a config file. The agentic mode asks clarification questions when the code is ambiguous.
+- **Cost-transparent**: every API call is tracked. The dashboard shows token counts and estimated costs per phase, per run.
+- **Web dashboard included**: track multiple projects, browse run history, compare Figma vs app side by side, manage discrepancies (ignore, fix, annotate), generate fix prompts for developers.
 
 ## Features
 
-- **Source code analysis**: automatic framework detection (Flutter, React, Vue, Angular, Next.js), extraction of routes, pages and design tokens via Claude AI. Optional **agentic mode** where Claude explores the codebase with tools instead of a single prompt dump — produces more accurate DTOs, auth guards, and test payloads
-- **Figma export**: full Figma file tree download, screen extraction, design tokens and elements via REST API, with local cache and rate limiting management
-- **Intelligent matching**: automatic association of Figma screens to application routes using vision AI (Claude Vision)
-- **Application capture**: automated navigation with Playwright, Flutter CanvasKit authentication, test data creation via API. Includes `setup-test-data` interactive agent that validates API payloads against the live backend
-- **Hybrid comparison**: programmatic analysis (deltaE CIE2000 colors, typography, spacing) + semantic analysis via vision AI
-- **Standalone HTML report**: self-contained HTML file with embedded images, dark theme, interactive side-by-side
-- **Web dashboard**: htmx interface with project tracking, run history, screen gallery, discrepancy management (ignore, fix, annotate)
-- **Daemon service**: installation as a systemd (Linux) or launchd (macOS) service for a permanent dashboard
+- **Source code analysis**: automatic framework detection, route extraction, design token discovery. Optional **agentic mode** (Claude explores the codebase with read/grep/list tools) for higher accuracy on complex projects
+- **Figma export**: `.fig` file parsing (offline), ZIP import, or REST API with local cache and rate limiting
+- **Intelligent matching**: Figma screens matched to app routes using Claude Vision, with human-reviewable YAML output
+- **Application capture**: Playwright automation with Flutter CanvasKit support, multi-strategy click/fill, test data seeding via API, silent redirect detection
+- **Interactive `setup-test-data` agent**: explores your codebase, builds API payloads, validates them against the live backend, writes verified config
+- **Hybrid comparison**: per-element analysis across 9 categories with zero-tolerance on colors, borders, and positions
+- **Standalone HTML report**: self-contained file with embedded images, dark theme, side-by-side view
+- **Web dashboard**: htmx interface with project tracking, run history, screen gallery, discrepancy management
+- **Daemon service**: systemd (Linux) or launchd (macOS) for a permanent dashboard
 
 ## Installation
 
