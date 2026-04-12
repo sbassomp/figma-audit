@@ -424,7 +424,7 @@ The command requires an interactive terminal (it may ask clarification questions
 
 ### Test setup configuration
 
-For most pages, figma-audit just authenticates and navigates. But pages with path parameters (`/courses/:id`, `/invoices/:id`, `/profile/:userId`) cannot be reached without a valid entity ID, and pages whose state depends on backend data (a course in the "taken" state, a paid invoice, etc.) need that data to exist before the screenshot is taken. The `test_setup` block tells Phase 4 how to log in via the API and seed those entities so the tool can build real URLs and capture real content.
+For most pages, figma-audit just authenticates and navigates. But pages with path parameters (`/products/:id`, `/orders/:id`, `/profile/:userId`) cannot be reached without a valid entity ID, and pages whose state depends on backend data (a product in the "published" state, a paid order, etc.) need that data to exist before the screenshot is taken. The `test_setup` block tells Phase 4 how to log in via the API and seed those entities so the tool can build real URLs and capture real content.
 
 #### How `test_setup` is normally generated
 
@@ -439,11 +439,11 @@ The AI can hallucinate field names that look plausible but do not match the real
   Setting up test data via API...
     API login OK (seed)
     Item 1 failed (400): {"type":"about:blank","title":"Validation Error",
-       "detail": "courseType: Course type is required, ..."}
+       "detail": "category: Category is required, ..."}
   0 test item(s) created
 ```
 
-…followed in the run page by captures marked **`Unresolved placeholder: course_id not in test_data`**. This is the placeholder guard refusing to navigate to a nonsense URL like `/courses/placeholder_course_id`. It is the tool telling you the seed step did not produce a real ID.
+…followed in the run page by captures marked **`Unresolved placeholder: product_id not in test_data`**. This is the placeholder guard refusing to navigate to a nonsense URL like `/products/placeholder_product_id`. It is the tool telling you the seed step did not produce a real ID.
 
 When that happens, override `test_setup` in your `figma-audit.yaml`. The YAML override fully replaces the manifest version — it is not merged, so write the whole block.
 
@@ -452,21 +452,19 @@ When that happens, override `test_setup` in your `figma-audit.yaml`. The YAML ov
 Open the request DTO of the endpoint you want to seed (in the project being audited, not in figma-audit). For Flutter / Dart this is typically a `freezed` class:
 
 ```dart
-// lib/features/courses/data/models/course.dart
-class CreateCourseRequest with _$CreateCourseRequest {
-  const factory CreateCourseRequest({
-    required double departureLat,
-    required double departureLng,
-    required String departureAddress,
-    required double destinationLat,
-    required double destinationLng,
-    required String destinationAddress,
-    required DateTime desiredArrivalTime,   // must be in the future
-    required int waitingTimeMinutes,
-    required CourseType courseType,         // enum: TYPE_1, TYPE_2, ...
-    VehicleType? vehicleType,
-    String? comments,
-  }) = _CreateCourseRequest;
+// lib/features/catalog/data/models/product.dart
+class CreateProductRequest with _$CreateProductRequest {
+  const factory CreateProductRequest({
+    required String title,
+    required String description,
+    required double priceCents,
+    required String sku,
+    required Category category,             // enum: ELECTRONICS, BOOKS, ...
+    required DateTime publishAt,             // must be in the future
+    @Default(0) int stockQuantity,
+    ProductVisibility? visibility,
+    String? notes,
+  }) = _CreateProductRequest;
 }
 ```
 
@@ -490,38 +488,37 @@ test_setup:
   # The returned ID is injected into test_data under test_data_key, so any
   # ${test_data.<key>} placeholder in navigation_steps gets a real value.
   seed_items:
-    - endpoint: /api/exchange/courses           # The path to call (with /api prefix
+    - endpoint: /api/catalog/products           # The path to call (with /api prefix
                                                 # if your backend uses one).
       method: POST
       payload:                                  # Must EXACTLY match the request DTO
-        departureLat: 48.8566                   # of your backend. Hard-coded values
-        departureLng: 2.3522                    # are fine for fixed fields.
-        departureAddress: "1 Rue de la Paix, 75001 Paris"
-        destinationLat: 48.8698
-        destinationLng: 2.3075
-        destinationAddress: "Hopital Saint-Louis, 75010 Paris"
-        desiredArrivalTime: "${now+1d}"         # Magic token: ISO-8601 UTC, 1 day
+        title: "figma-audit seed product"       # of your backend. Hard-coded values
+        description: "Seed entity for audit"    # are fine for fixed fields.
+        priceCents: 1999
+        sku: "SEED-001"
+        category: ELECTRONICS                   # Use the JSON value from the enum,
+                                                # not the language-side name.
+        publishAt: "${now+1d}"                  # Magic token: ISO-8601 UTC, 1 day
                                                 # in the future. See "Template tokens"
                                                 # below.
-        waitingTimeMinutes: 30
-        courseType: TYPE_1                      # Use the JSON value from the enum,
-        vehicleType: AMBULANCE                  # not the language-side name.
+        stockQuantity: 10
+        visibility: PUBLIC
       id_path: id                               # Where to find the ID in the
                                                 # response (dotted path: "data.id").
-      test_data_key: course_id                  # Key under which to store the ID
+      test_data_key: product_id                 # Key under which to store the ID
                                                 # so navigation_steps can use
-                                                # ${test_data.course_id}.
+                                                # ${test_data.product_id}.
 
   # OPTIONAL: transition the seeded item into a different state for pages that
-  # need a "taken / paid / archived" variant.
+  # need a "published / paid / archived" variant.
   take_item:
-    endpoint: /api/exchange/courses/${course_id}/take
+    endpoint: /api/catalog/products/${product_id}/publish
     method: POST
-    test_data_key: course_taken_id
+    test_data_key: product_published_id
 
   # OPTIONAL: cleanup endpoint called once captures are done. Without this,
   # every run leaks a test entity into your backend.
-  cleanup_endpoint: /api/exchange/courses/${item_id}/archive
+  cleanup_endpoint: /api/catalog/products/${item_id}/archive
 ```
 
 #### Template tokens
