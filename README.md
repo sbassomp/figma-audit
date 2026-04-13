@@ -14,10 +14,10 @@
 Your designer delivers pixel-perfect Figma mockups. Your developers implement them. But between the design and the deployed app, things drift: a button color is slightly off, a border-radius changes, spacing is inconsistent, an element is missing. These gaps accumulate silently and erode the user experience.
 
 Existing tools don't solve this:
-- **Visual regression tools** (BackstopJS, Percy, Chromatic, Applitools) compare two versions of the *same app* — they catch regressions but can't tell you if the implementation matches the *original design*.
+- **Visual regression tools** (BackstopJS, Percy, Chromatic, Applitools) compare two versions of the *same app*. They catch regressions but can't tell you if the implementation matches the *original design*.
 - **Manual review** works but doesn't scale: designers eyeball each screen, open Figma, compare side by side, file tickets. It takes hours and misses subtle differences.
 
-**figma-audit** fills this gap. It takes your Figma file, takes your deployed app URL, and produces a structured report of every discrepancy — automatically.
+**figma-audit** fills this gap. It takes your Figma file, takes your deployed app URL, and produces a structured report of every discrepancy, automatically.
 
 ## How it works
 
@@ -48,7 +48,7 @@ Each phase reads from and writes to a shared output directory. You can re-run an
 
 **Phase 1** uses Claude AI to analyze your source code: it detects the framework (Flutter, React, Vue, Angular, Next.js), extracts every route, identifies auth guards, and generates test data setup instructions. An optional **agentic mode** lets Claude explore the codebase iteratively with tools for higher accuracy.
 
-**Phase 2** exports your Figma file — either from a `.fig` file (offline, recommended), a ZIP export, or the Figma REST API. Design tokens (colors, fonts, spacing, border-radius) are extracted alongside the screen images.
+**Phase 2** exports your Figma file, either from a `.fig` file (offline, recommended), a ZIP export, or the Figma REST API. Design tokens (colors, fonts, spacing, border-radius) are extracted alongside the screen images.
 
 **Phase 3** uses Claude Vision to match each Figma screen to its corresponding app route. The result is a human-reviewable YAML mapping that you can edit before proceeding.
 
@@ -100,8 +100,8 @@ The `setup` command guides you through the installation step by step:
 - Figma screens provided via **one** of the following (see [Providing Figma screens](#providing-figma-screens)):
   - A `.fig` file (exported from Figma Desktop or downloaded from the Figma UI)
   - A ZIP export from Figma Desktop (File > Export frames to PDF)
-  - A [Figma Personal Access Token](https://www.figma.com/developers/api#access-tokens) (online API — subject to rate limits)
-- `pdftoppm` (`poppler-utils` package) — only needed for ZIP imports
+  - A [Figma Personal Access Token](https://www.figma.com/developers/api#access-tokens) (online API, subject to rate limits)
+- `pdftoppm` (`poppler-utils` package), only needed for ZIP imports
 
 ## Quick start
 
@@ -187,13 +187,13 @@ Each phase can be executed independently. Phases read from and write to the `--o
 | `figma-audit capture --app-url https://...` | 4 | Mapping + manifest | App screenshots |
 | `figma-audit compare` | 5 | Screenshots + manifests | `discrepancies.json` |
 | `figma-audit report` | 6 | Discrepancies | `report.html` |
-| `figma-audit setup-test-data` | — | Manifest + live backend | `figma-audit.yaml` |
+| `figma-audit setup-test-data` | n/a | Manifest + live backend | `figma-audit.yaml` |
 
 The `setup-test-data` command is an interactive agent (not part of the 6-phase pipeline). See [Agentic mode](#agentic-mode) and [Test setup configuration](#test-setup-configuration) below.
 
 ### Providing Figma screens
 
-There are three ways to feed Figma screens into figma-audit. The `.fig` file and ZIP import are **recommended** — they are faster, work offline, and avoid the Figma API rate limits entirely.
+There are three ways to feed Figma screens into figma-audit. The `.fig` file and ZIP import are **recommended**: they are faster, work offline, and avoid the Figma API rate limits entirely.
 
 | Method | Command | Figma token needed? | Notes |
 |--------|---------|---------------------|-------|
@@ -388,7 +388,7 @@ Phase 1 (code analysis) supports two modes:
 
 | Mode | Cost | Speed | Accuracy | Activation |
 |------|------|-------|----------|------------|
-| **one-shot** (default) | ~$0.30 | ~2 min | Good for simple routers; can hallucinate DTO field names on complex apps | Default — no flag needed |
+| **one-shot** (default) | ~$0.30 | ~2 min | Good for simple routers; can hallucinate DTO field names on complex apps | Default (no flag needed) |
 | **agentic** (opt-in) | ~$0.50-1.50 | ~5-10 min | Reads DTOs directly via `grep_code` + `read_file`; verifies auth guards in the router; produces correct `test_setup` payloads | See below |
 
 In agentic mode, Claude iteratively explores the codebase using tools (`read_file`, `grep_code`, `list_files`, `ask_user`) instead of receiving a single 150KB prompt dump. This avoids the main failure mode of one-shot analysis: hallucinated field names and wrong `auth_required` flags.
@@ -452,7 +452,7 @@ The AI can hallucinate field names that look plausible but do not match the real
 
 …followed in the run page by captures marked **`Unresolved placeholder: product_id not in test_data`**. This is the placeholder guard refusing to navigate to a nonsense URL like `/products/placeholder_product_id`. It is the tool telling you the seed step did not produce a real ID.
 
-When that happens, override `test_setup` in your `figma-audit.yaml`. The YAML override fully replaces the manifest version — it is not merged, so write the whole block.
+When that happens, override `test_setup` in your `figma-audit.yaml`. The YAML override fully replaces the manifest version: it is not merged, so write the whole block.
 
 #### Finding the right field names
 
@@ -543,7 +543,7 @@ Two kinds of `${...}` placeholders are supported in `payload`, `endpoint`, and n
 
 Suffixes for `${now±N<unit>}`: `s` seconds, `m` minutes, `h` hours, `d` days.
 
-Hard-coding a date (`"2025-01-15T14:00:00Z"`) is the most common cause of intermittent test_setup failures — it works for a while, then the date drifts into the past and the backend starts rejecting it. Always use `${now+1d}` (or longer) for future-required fields.
+Hard-coding a date (`"2025-01-15T14:00:00Z"`) is the most common cause of intermittent test_setup failures: it works for a while, then the date drifts into the past and the backend starts rejecting it. Always use `${now+1d}` (or longer) for future-required fields.
 
 #### Two test accounts: `test_credentials` vs `seed_account`
 
@@ -555,7 +555,7 @@ test_credentials:                    # The MAIN user the browser logs in as.
 seed_account:                        # A SECOND user used only by _setup_test_data
   email: "seeder@example.com"        # to create entities. Required when items
   otp: "1234"                        # created by user X are visible to user Y as
-                                     # "available" — typical for marketplace apps.
+                                     # "available", typical for marketplace apps.
 ```
 
 If your app does not have this depositor/consumer split, omit `seed_account` and the seed step will use `test_credentials`.
@@ -564,16 +564,16 @@ If your app does not have this depositor/consumer split, omit `seed_account` and
 
 If after `_setup_test_data` runs, any `test_data` value still contains a marker like `placeholder_*`, `todo_*`, `<TODO>`, `<REPLACE>`, or `xxxxxx`, the tool purges it and prints a warning. Any subsequent capture whose URL would have used that key fails with a clear `Unresolved placeholder: ...` error instead of silently navigating to a garbage URL. You will see those failures in the run page's **Navigation failures** card with the exact unresolved template.
 
-This is by design: **the tool refuses to lie about what it captured**. If you see a placeholder error, fix the matching `seed_items` entry — do not chase the symptom in the comparison view.
+This is by design: **the tool refuses to lie about what it captured**. If you see a placeholder error, fix the matching `seed_items` entry. Do not chase the symptom in the comparison view.
 
 ## Figma rate limiting
 
-The Figma API enforces strict limits on image exports (~30 req/min, with a cooldown that can reach 48h if exceeded). **This is why `.fig` file and ZIP imports are recommended** — they bypass the API entirely.
+The Figma API enforces strict limits on image exports (~30 req/min, with a cooldown that can reach 48h if exceeded). **This is why `.fig` file and ZIP imports are recommended**: they bypass the API entirely.
 
 If you do use the API:
 
 1. **Local cache**: the Figma file tree is downloaded once and cached in `figma_raw/file.json` (69 MB for a 77-screen file). Subsequent runs use the cache automatically.
-2. **Offline mode**: `figma-audit figma --offline` works only from the cache — zero API calls.
+2. **Offline mode**: `figma-audit figma --offline` works only from the cache: zero API calls.
 3. **Force refresh**: `figma-audit figma --force-refresh` re-downloads everything (use sparingly).
 
 If you hit the rate limit and get a 48h cooldown, switch to `.fig` file or ZIP import to keep working.
