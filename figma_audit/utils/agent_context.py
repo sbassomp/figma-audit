@@ -24,8 +24,18 @@ class AgentContext:
             outside this directory is rejected by the tool implementation.
         app_url: Optional base URL for http_request. None means HTTP tools
             should refuse to operate.
-        auth_token: Optional bearer token automatically injected into
-            http_request calls. Never logged.
+        tokens: Map of role name → bearer token. Populated by the caller
+            with one entry per declared account (``{"seller": "...", "buyer": "..."}``).
+            :class:`http_request` picks the token based on the ``as`` param
+            and falls back to :attr:`default_role` when omitted.
+        default_role: Name of the role used when a tool call does not specify
+            ``as``. Set automatically to the sole token's role if only one is
+            registered, or to ``"default"`` when the legacy ``auth_token``
+            shortcut is used.
+        auth_token: **Legacy** single-token shortcut. When provided, it is
+            merged into ``tokens`` under role ``"default"`` at construction
+            time. New callers should populate :attr:`tokens` directly and set
+            :attr:`default_role` explicitly.
         interactive: Whether ask_user can actually prompt the human via stdin.
             Defaults to True only if stdin is a TTY.
         max_file_bytes: Hard cap on a single read_file call (default 50KB).
@@ -42,6 +52,8 @@ class AgentContext:
 
     project_dir: Path
     app_url: str | None = None
+    tokens: dict[str, str] = field(default_factory=dict)
+    default_role: str | None = None
     auth_token: str | None = None
     interactive: bool = field(default_factory=lambda: sys.stdin.isatty())
     max_file_bytes: int = 50_000
@@ -61,6 +73,17 @@ class AgentContext:
         if not self.project_dir.is_dir():
             raise ValueError(f"project_dir is not a directory: {self.project_dir}")
 
+        # Legacy shortcut: a single ``auth_token`` becomes the ``default`` role.
+        if self.auth_token and "default" not in self.tokens:
+            self.tokens["default"] = self.auth_token
+            if self.default_role is None:
+                self.default_role = "default"
+
+        # Convenience: if exactly one token is registered and the caller
+        # did not pick a default_role, that token is the default.
+        if self.default_role is None and len(self.tokens) == 1:
+            self.default_role = next(iter(self.tokens))
+
     def is_inside_sandbox(self, candidate: Path) -> bool:
         """Return True iff candidate (after symlink resolution) lives under project_dir."""
         try:
@@ -71,3 +94,16 @@ class AgentContext:
             return resolved.is_relative_to(self.project_dir)
         except ValueError:
             return False
+
+    def token_for(self, role: str | None) -> tuple[str | None, str | None]:
+        """Look up the bearer token for a role name.
+
+        Returns ``(token, resolved_role)``. When ``role`` is None the
+        :attr:`default_role` is used. Returns ``(None, None)`` if neither a
+        role nor a default is available, and ``(None, role)`` when the role
+        exists conceptually but has no registered token.
+        """
+        resolved = role or self.default_role
+        if resolved is None:
+            return None, None
+        return self.tokens.get(resolved), resolved

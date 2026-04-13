@@ -201,6 +201,90 @@ class TestHttpRequest:
         result = HTTP_REQUEST.run({"method": "TRACE", "path": "/api/x"}, ctx)
         assert "error" in result
 
+    def test_multi_token_default_role(self, http_server, tmp_path: Path, base_url: str) -> None:
+        """When no ``as`` is passed, the default role's token is used."""
+        ctx = AgentContext(
+            project_dir=tmp_path,
+            app_url=base_url,
+            tokens={"seller": "seller-token", "buyer": "buyer-token"},
+            default_role="seller",
+            interactive=False,
+        )
+        http_server.responses[("GET", "/api/me")] = (200, {"who": "?"})
+        HTTP_REQUEST.run({"method": "GET", "path": "/api/me"}, ctx)
+        assert http_server.received[0]["headers"]["Authorization"] == "Bearer seller-token"
+
+    def test_multi_token_explicit_role(self, http_server, tmp_path: Path, base_url: str) -> None:
+        """Passing ``as`` selects the matching role's token."""
+        ctx = AgentContext(
+            project_dir=tmp_path,
+            app_url=base_url,
+            tokens={"seller": "seller-token", "buyer": "buyer-token"},
+            default_role="seller",
+            interactive=False,
+        )
+        http_server.responses[("POST", "/api/orders")] = (201, {"id": "o-1"})
+        result = HTTP_REQUEST.run(
+            {"method": "POST", "path": "/api/orders", "body": {"x": 1}, "as": "buyer"},
+            ctx,
+        )
+        assert http_server.received[0]["headers"]["Authorization"] == "Bearer buyer-token"
+        assert result["as"] == "buyer"
+
+    def test_multi_token_unknown_role_rejected(
+        self, http_server, tmp_path: Path, base_url: str
+    ) -> None:
+        ctx = AgentContext(
+            project_dir=tmp_path,
+            app_url=base_url,
+            tokens={"seller": "seller-token"},
+            default_role="seller",
+            interactive=False,
+        )
+        result = HTTP_REQUEST.run(
+            {"method": "GET", "path": "/api/x", "as": "ghost"},
+            ctx,
+        )
+        assert "error" in result
+        assert "ghost" in result["error"]
+        # Server must not have been hit
+        assert len(http_server.received) == 0
+
+    def test_legacy_auth_token_still_works(
+        self, http_server, tmp_path: Path, base_url: str
+    ) -> None:
+        """``auth_token=...`` shortcut still populates the default token slot."""
+        ctx = AgentContext(
+            project_dir=tmp_path,
+            app_url=base_url,
+            auth_token="legacy-token",
+            interactive=False,
+        )
+        assert ctx.tokens == {"default": "legacy-token"}
+        assert ctx.default_role == "default"
+        http_server.responses[("GET", "/api/me")] = (200, {})
+        HTTP_REQUEST.run({"method": "GET", "path": "/api/me"}, ctx)
+        assert http_server.received[0]["headers"]["Authorization"] == "Bearer legacy-token"
+
+    def test_same_payload_different_role_not_deduped(
+        self, http_server, tmp_path: Path, base_url: str
+    ) -> None:
+        """Anti-loop is role-scoped: the same POST as seller then buyer is valid."""
+        ctx = AgentContext(
+            project_dir=tmp_path,
+            app_url=base_url,
+            tokens={"seller": "s", "buyer": "b"},
+            default_role="seller",
+            interactive=False,
+        )
+        http_server.responses[("POST", "/api/items")] = (201, {"id": "i"})
+        for role in ("seller", "buyer", "seller", "buyer"):
+            HTTP_REQUEST.run(
+                {"method": "POST", "path": "/api/items", "body": {"x": 1}, "as": role},
+                ctx,
+            )
+        assert len(http_server.received) == 4
+
     def test_budget_cap(self, http_server, tmp_path: Path, base_url: str) -> None:
         ctx = AgentContext(
             project_dir=tmp_path,

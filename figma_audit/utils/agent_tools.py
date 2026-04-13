@@ -431,10 +431,29 @@ def _run_http_request(params: dict, ctx: AgentContext) -> dict:
 
     body = params.get("body")
     use_auth = bool(params.get("use_auth", True))
+    as_role = params.get("as")
 
-    # Anti-loop: refuse the 3rd identical call.
+    # Resolve the account role → token before the anti-loop signature so
+    # identical payloads issued by different actors count as distinct
+    # requests (creating the same item as seller vs buyer is meaningful).
+    token: str | None = None
+    resolved_role: str | None = None
+    if use_auth:
+        token, resolved_role = ctx.token_for(as_role)
+        if as_role and token is None:
+            known = sorted(ctx.tokens.keys()) or ["<none>"]
+            return {
+                "error": (
+                    f"no token registered for role '{as_role}'. "
+                    f"Known roles: {known}. Pass `as` with a known role, "
+                    "omit it to use the default role, or set use_auth=false."
+                )
+            }
+
+    # Anti-loop: refuse the 3rd identical call (role-scoped).
     body_repr = json.dumps(body, sort_keys=True) if body is not None else ""
-    sig = hashlib.md5(f"{method}|{path}|{body_repr}".encode()).hexdigest()
+    sig_role = resolved_role or ""
+    sig = hashlib.md5(f"{method}|{path}|{body_repr}|{sig_role}".encode()).hexdigest()
     seen = ctx._http_seen.get(sig, 0)
     if seen >= 2:
         return {
@@ -452,8 +471,8 @@ def _run_http_request(params: dict, ctx: AgentContext) -> dict:
 
     url = ctx.app_url.rstrip("/") + path
     headers: dict[str, str] = {"Content-Type": "application/json"}
-    if use_auth and ctx.auth_token:
-        headers["Authorization"] = f"Bearer {ctx.auth_token}"
+    if use_auth and token:
+        headers["Authorization"] = f"Bearer {token}"
 
     try:
         resp = requests.request(
@@ -480,23 +499,33 @@ def _run_http_request(params: dict, ctx: AgentContext) -> dict:
     # Only echo a few headers, all redacted
     safe_headers = {k: v for k, v in resp.headers.items() if not SENSITIVE_KEY_PATTERN.search(k)}
 
-    return {
+    result: dict[str, Any] = {
         "status": resp.status_code,
         "headers": dict(list(safe_headers.items())[:10]),
         "body": parsed_body,
     }
+    # Echo which role actually made the call so the model can reason about
+    # multi-actor flows ("I created the listing as seller, so I must buy it
+    # as buyer" is only possible if the tool tells it who it was).
+    if resolved_role:
+        result["as"] = resolved_role
+    return result
 
 
 HTTP_REQUEST = Tool(
     name="http_request",
     description=(
-        "Send an HTTP request to the app under audit. The base URL and bearer "
-        "token are configured by the harness — supply only `method`, `path`, "
-        "and optional JSON `body`. **400 responses typically contain validation "
-        "errors listing the missing or invalid fields — read the body carefully "
-        "and retry with a corrected payload.** Calling the same exact request "
-        "more than twice in a row is refused; change the payload meaningfully "
-        "between attempts. Total budget per session: 40 calls."
+        "Send an HTTP request to the app under audit. The base URL is "
+        "configured by the harness; the bearer token is selected from the "
+        "registered accounts based on the `as` parameter (or the default "
+        "role if omitted). Supply `method`, `path`, and optional JSON `body`. "
+        "**400 responses typically contain validation errors listing the "
+        "missing or invalid fields — read the body carefully and retry with "
+        "a corrected payload.** The same exact request (method + path + body "
+        "+ role) repeated more than twice is refused; change the payload "
+        "meaningfully or switch actors between attempts. Total budget per "
+        "session: 40 calls. The response echoes which role made the call "
+        "under the `as` key."
     ),
     input_schema={
         "type": "object",
@@ -516,6 +545,15 @@ HTTP_REQUEST = Tool(
             "use_auth": {
                 "type": "boolean",
                 "description": "Include the bearer token. Default true.",
+            },
+            "as": {
+                "type": "string",
+                "description": (
+                    "Account role name to authenticate as (e.g. 'seller', "
+                    "'buyer'). Must match one of the roles registered by the "
+                    "harness. When omitted, the default role is used. Ignored "
+                    "if use_auth is false."
+                ),
             },
         },
         "required": ["method", "path"],
