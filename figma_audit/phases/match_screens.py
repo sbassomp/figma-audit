@@ -209,16 +209,24 @@ def run(config: Config) -> Path:
     client = ClaudeClient(api_key=config.anthropic_api_key)
     all_mappings: list[dict] = []
 
+    from figma_audit.utils.progress import get_progress
+
+    run_progress = get_progress()
+    n_total_screens = len(screens_with_images) + len(screens_without_images)
+    processed_screens = 0
+    if run_progress and n_total_screens > 0:
+        run_progress.update(
+            step=f"Matching 0/{n_total_screens} screens",
+            progress=0,
+            total=n_total_screens,
+        )
+
     # ── Batch 1: Screens with images (vision) ─────────────────────
     if screens_with_images:
         batches = [
             screens_with_images[i : i + VISION_BATCH_SIZE]
             for i in range(0, len(screens_with_images), VISION_BATCH_SIZE)
         ]
-
-        from figma_audit.utils.progress import get_progress
-
-        run_progress = get_progress()
 
         for batch_idx, batch in enumerate(batches):
             console.print(
@@ -227,9 +235,12 @@ def run(config: Config) -> Path:
             )
             if run_progress:
                 run_progress.update(
-                    step=f"Vision batch {batch_idx + 1}/{len(batches)}",
-                    progress=batch_idx + 1,
-                    total=len(batches),
+                    step=(
+                        f"Matching {processed_screens}/{n_total_screens} screens "
+                        f"(vision batch {batch_idx + 1}/{len(batches)})"
+                    ),
+                    progress=processed_screens,
+                    total=n_total_screens,
                 )
 
             image_paths = []
@@ -257,10 +268,26 @@ def run(config: Config) -> Path:
                 phase="match",
             )
             all_mappings.extend(result.get("mappings", []))
+            processed_screens += len(batch)
+            if run_progress:
+                run_progress.update(
+                    step=f"Matching {processed_screens}/{n_total_screens} screens",
+                    progress=processed_screens,
+                    total=n_total_screens,
+                )
 
     # ── Batch 2: Screens without images (text-only) ───────────────
     if screens_without_images:
         console.print(f"[bold]Text-only matching ({len(screens_without_images)} screens)...[/bold]")
+        if run_progress:
+            run_progress.update(
+                step=(
+                    f"Matching {processed_screens}/{n_total_screens} screens "
+                    f"(text-only, {len(screens_without_images)} remaining)"
+                ),
+                progress=processed_screens,
+                total=n_total_screens,
+            )
 
         screens_text = _build_screens_text(screens_without_images)
         user_prompt = (
@@ -278,6 +305,13 @@ def run(config: Config) -> Path:
             phase="match",
         )
         all_mappings.extend(result.get("mappings", []))
+        processed_screens += len(screens_without_images)
+        if run_progress:
+            run_progress.update(
+                step=f"Matching {processed_screens}/{n_total_screens} screens",
+                progress=processed_screens,
+                total=n_total_screens,
+            )
 
     _last_client = client
     client.print_usage()
