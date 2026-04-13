@@ -1,9 +1,41 @@
 [project]
 name = "figma-audit"
 version = "0.1.0"
-description = "CLI tool for semantic comparison between Figma designs and deployed web applications"
+description = "Automated design conformity audits: compare your Figma designs against your deployed app and get a detailed discrepancy report."
+readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+authors = [
+    { name = "Seb Bassompierre", email = "sbassompierre@kaseilabs.com" },
+]
+keywords = [
+    "figma",
+    "design-audit",
+    "visual-regression",
+    "design-system",
+    "playwright",
+    "claude",
+    "anthropic",
+    "qa",
+    "ui-testing",
+    "design-review",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Multimedia :: Graphics",
+]
 dependencies = [
     "anthropic>=0.40",
     "playwright>=1.40",
@@ -28,7 +60,16 @@ dev = [
     "pytest-asyncio>=0.21",
     "ruff>=0.1",
     "mypy>=1.0",
+    "build>=1.0",
+    "twine>=5.0",
+    "coverage>=7.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/sbassomp/figma-audit"
+Repository = "https://github.com/sbassomp/figma-audit"
+Issues = "https://github.com/sbassomp/figma-audit/issues"
+Changelog = "https://github.com/sbassomp/figma-audit/blob/main/CHANGELOG.md"
 
 [project.scripts]
 figma-audit = "figma_audit.__main__:cli"
@@ -39,6 +80,13 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["figma_audit*"]
+
+[tool.setuptools.package-data]
+figma_audit = [
+    "web/templates/*.html",
+    "web/static/*.css",
+    "web/static/*.js",
+]
 
 [tool.ruff]
 target-version = "py311"
