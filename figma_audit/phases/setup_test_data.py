@@ -21,7 +21,7 @@ from pathlib import Path
 import yaml
 from rich.console import Console
 
-from figma_audit.config import Config
+from figma_audit.config import Account, Config, TestSetup
 from figma_audit.utils.agent_context import AgentContext
 from figma_audit.utils.agent_loop import run_agent_loop
 from figma_audit.utils.agent_tools import LIVE_BACKEND_TOOLS
@@ -36,11 +36,18 @@ that the tool uses to seed test data before capturing screenshots.
 
 ## Context
 
-figma-audit captures pages of a web app via Playwright. For pages whose \
-URL has path parameters (like /courses/:id or /invoices/:id), the tool \
-needs to create real entities via the app's API so it can navigate to \
-/courses/<real-id>. The `test_setup` config block describes the API \
-endpoints, payloads, and auth flow needed to do this.
+figma-audit captures pages of a web app via Playwright. Many pages only \
+make sense when real backend state exists:
+- A `/courses/:id` page needs a real course in the database
+- An empty-vs-populated list page needs an item seeded first
+- A two-sided flow (seller ↔ buyer, requester ↔ taker, admin ↔ user) \
+  requires setup steps performed by DIFFERENT accounts, because each \
+  action is authorized for a specific role only
+
+The `test_setup` block is a declarative script: a list of accounts and \
+a DAG of HTTP calls, each tagged with which account performs it. The \
+harness runs the steps in order before every capture, replaying the \
+data each run needs.
 
 The user has already run Phase 1 (code analysis) which produced a \
 pages_manifest.json with an AI-guessed test_setup. That guess often \
@@ -52,79 +59,214 @@ reading the actual source code and validating against the live backend.
 - `read_file(path)`: read files in the project being audited
 - `grep_code(pattern, file_glob)`: search the project codebase
 - `list_files(directory)`: explore directory structure
-- `http_request(method, path, body)`: call the live backend (base URL + \
-  bearer token are injected automatically). The token belongs to a \
-  seed account that creates entities visible to the main test user.
+- `http_request(method, path, body, as)`: call the live backend. Base URL \
+  is injected automatically. Use `as` to pick which account performs the \
+  call — it must be one of the roles the harness has pre-authenticated \
+  (listed below). When omitted, the default role is used. **Match the \
+  role to the action**: if "only drivers can take a course", call the take \
+  endpoint `as: driver`. If "only clients can create a course", call the \
+  create endpoint `as: client`.
 - `ask_user(question)`: ask the human when genuinely ambiguous
 - `submit_result(result)`: call once when you have a complete, \
   backend-validated test_setup JSON object
 
 ## Process
 
-1. Read the initial context below (pages_manifest skeleton) to understand \
-   what endpoints the tool needs.
-2. For each seed endpoint:
-   a. grep/read the project code to find the exact request DTO class \
-      (Dart: freezed/JsonSerializable, Kotlin: data class, TS: Zod/interface)
-   b. Note the SERIALIZED field names (check @JsonValue, @JsonProperty, \
-      @SerializedName annotations — the JSON field name may differ from \
-      the property name)
-   c. Build a realistic payload using the correct field names and types
-   d. For date/time fields that must be in the future, use the magic \
-      template "${now+1d}" (resolves to tomorrow's ISO-8601 UTC timestamp \
-      at capture time)
-   e. For fields that reference other test_data values, use "${test_data.X}"
-   f. Call http_request(POST, path, payload) to test it
-   g. If you get 400: READ THE ERROR BODY — it lists missing/invalid fields. \
-      Adjust and retry. Do NOT guess randomly. Do NOT retry the same payload.
-   h. If you get 2xx: record the working payload.
-3. Also verify the auth endpoint works (it has already been tested by the \
-   harness; you can call it to confirm).
-4. When ALL seed endpoints return 2xx, call submit_result with the full \
-   test_setup object.
+1. Read the initial context below to understand which pages need what state.
+2. For each step you need to script:
+   a. Work out which ROLE performs it. Read auth guards, permission \
+      decorators, role enums in the source to decide. If two roles are \
+      plausible, prefer the one whose name matches the action (an action \
+      called `acceptCourse` belongs to the party that accepts).
+   b. Find the exact request DTO in the source code (Dart freezed, Kotlin \
+      data class, TS Zod/interface). Note SERIALIZED field names — they \
+      may differ from property names via @JsonValue, @JsonProperty, etc.
+   c. Build a realistic payload using the correct field names and types.
+   d. For dates that must be in the future, use `${now+1d}` (resolves to \
+      tomorrow's ISO-8601 UTC timestamp at run time). Other supported \
+      suffixes: `${now}`, `${now-30m}`, `${now+2h}`.
+   e. For values produced by an EARLIER step, use `${key_name}` where \
+      `key_name` matches the `save` field of that step.
+   f. Call `http_request(POST, path, payload, as: <role>)` to validate.
+   g. On 400: READ THE ERROR BODY — it lists missing/invalid fields. Fix \
+      and retry. Never retry the exact same payload twice.
+   h. On 2xx: record the working payload and the id_path for `save`.
+3. When every step is green, call `submit_result` with the full block.
 
 ## Output schema (the argument to submit_result)
 
 ```json
 {
-  "auth_endpoint": "/api/...",
-  "auth_otp_request_endpoint": "/api/...",  // optional
-  "auth_payload": {"field": "${test_data.key}", ...},
-  "auth_token_path": "accessToken",  // dotted path in login response
-  "seed_items": [
+  "auth_endpoint": "/api/auth/login",
+  "auth_otp_request_endpoint": "/api/auth/otp",
+  "auth_payload": {"email": "${email}", "otp": "${otp}"},
+  "auth_token_path": "accessToken",
+
+  "default_viewer": "buyer",
+
+  "steps": [
     {
-      "endpoint": "/api/...",
+      "name": "create_listing",
+      "as": "seller",
+      "endpoint": "/api/listings",
       "method": "POST",
-      "payload": {/* exact fields, validated */},
-      "id_path": "id",
-      "test_data_key": "course_id"  // injected into test_data
+      "payload": {"title": "Test Item", "priceCents": 1000},
+      "save": {"listing_id": "id"}
+    },
+    {
+      "name": "place_order",
+      "as": "buyer",
+      "endpoint": "/api/listings/${listing_id}/orders",
+      "method": "POST",
+      "payload": {"quantity": 1},
+      "save": {"order_id": "id"},
+      "depends_on": ["create_listing"]
     }
   ],
-  "take_item": {  // optional
-    "endpoint": "/api/items/${course_id}/take",
-    "method": "POST",
-    "test_data_key": "course_taken_id"
-  },
-  "cleanup_endpoint": "/api/items/${item_id}/archive"  // optional
+
+  "cleanup_endpoint": "/api/listings/${item_id}/archive"
 }
 ```
 
+**Do NOT emit an `accounts` field** — the harness injects the credentials \
+map from `figma-audit.yaml` itself. You only describe the STEPS and which \
+role performs each.
+
 ## Rules
 
-- ALWAYS read the actual DTO source code before building a payload. \
-  Never guess field names from the manifest skeleton alone.
-- For enum fields, find the @JsonValue or serialized string values in the \
-  code. Use those exact strings in the payload.
-- Dates that must be in the future: use "${now+1d}", never hard-code dates.
-- Credentials in auth_payload: use "${test_data.email}", "${test_data.otp}", \
-  "${test_data.phone}" — not literal values.
-- If a field is truly optional and you are unsure of its format, omit it.
-- Keep the payload minimal: only required fields + a few useful optionals.
+- ALWAYS read the actual DTO source code before building a payload.
+- For enum fields, find the exact serialized string values in the source.
+- Dates that must be in the future: use `${now+1d}`, never hard-code.
+- `auth_payload` is shared across all accounts (one login flow). Use \
+  `${email}` and `${otp}` — those placeholders are resolved per-account \
+  by the harness.
+- Keep payloads minimal: required fields plus a few useful optionals.
+- Each step must reference a role (`as`) that exists in the registered \
+  accounts list below. Using an unknown role will be rejected.
+- `depends_on` must list the `name` of any step whose `save` values are \
+  templated into this step's URL or payload. The harness enforces the \
+  order.
 - If you get 3 consecutive failures on the same endpoint, ask_user.
 """
 
 
-def _build_initial_message(manifest: dict, config: Config) -> str:
+def _derive_accounts(config: Config, test_setup: TestSetup) -> dict[str, Account]:
+    """Figure out which accounts to pre-authenticate.
+
+    Priority order:
+
+    1. ``test_setup.accounts`` (new-shape YAML) — used verbatim.
+    2. Legacy fallback: ``config.seed_account`` becomes role ``seed`` and
+       ``config.test_credentials`` becomes role ``main``. This lets users
+       who haven't migrated their YAML still benefit from Phase C by
+       getting two roles pre-authed automatically.
+    """
+    if test_setup.accounts:
+        return dict(test_setup.accounts)
+
+    accounts: dict[str, Account] = {}
+    if config.seed_account.email:
+        accounts["seed"] = Account(email=config.seed_account.email, otp=config.seed_account.otp)
+    if config.test_credentials.email:
+        accounts["main"] = Account(
+            email=config.test_credentials.email, otp=config.test_credentials.otp
+        )
+    return accounts
+
+
+def _login_accounts(
+    app_url: str,
+    test_setup_dict: dict,
+    accounts: dict[str, Account],
+    console: Console,
+) -> dict[str, str]:
+    """Pre-authenticate every account and return a map of role → bearer token.
+
+    Failures are reported but not fatal for individual accounts — the
+    caller decides whether to abort. The shared ``test_setup_dict`` is
+    mutated in place so ``_api_prefix_hint`` is discovered once and
+    reused across every login.
+    """
+    from figma_audit.phases.capture_app import _api_login
+
+    tokens: dict[str, str] = {}
+    for role, account in accounts.items():
+        if not account.email:
+            console.print(f"  [yellow]Role '{role}' has no email, skipping[/yellow]")
+            continue
+        creds = {"email": account.email, "otp": account.otp}
+        token = _api_login(app_url, test_setup_dict, creds)
+        if token:
+            tokens[role] = token
+            console.print(f"  [green]{role}: authenticated[/green] ({account.email})")
+        else:
+            console.print(f"  [red]{role}: login failed[/red] ({account.email})")
+    return tokens
+
+
+def _normalize_agent_output(raw: dict, accounts: dict[str, Account]) -> dict:
+    """Turn the agent's ``submit_result`` payload into a valid TestSetup dict.
+
+    The agent is instructed to emit the new multi-actor shape (``steps``
+    + ``default_viewer``) and is told NOT to output ``accounts`` (the
+    harness injects them from config). Older prompts or confused models
+    occasionally return a legacy ``seed_items`` / ``take_item`` block —
+    we handle both.
+
+    We inject ``accounts`` before validation so that step refs like
+    ``as: seller`` resolve against the real registered accounts rather
+    than failing on an empty account map.
+    """
+    clean = {k: v for k, v in raw.items() if not k.startswith("_")}
+
+    is_new_shape = bool(clean.get("steps") or clean.get("accounts"))
+
+    if is_new_shape:
+        # Agent emitted the new shape: drop any accounts it may have
+        # included (we don't trust agent-supplied credentials) and inject
+        # the real ones from config before validation.
+        clean.pop("accounts", None)
+        clean["accounts"] = {
+            role: acct.model_dump(exclude_none=True) for role, acct in accounts.items()
+        }
+        parsed = TestSetup.model_validate(clean)
+    else:
+        # Legacy shape — route through from_raw with credentials hints so
+        # seed_items/take_item migrate to the right role names, then
+        # overwrite the parsed accounts with the real ones from config.
+        main_creds = None
+        seed_creds = None
+        if "main" in accounts and accounts["main"].email:
+            main_creds = {
+                "email": accounts["main"].email,
+                "otp": accounts["main"].otp,
+            }
+        if "seed" in accounts and accounts["seed"].email:
+            seed_creds = {
+                "email": accounts["seed"].email,
+                "otp": accounts["seed"].otp,
+            }
+        parsed = TestSetup.from_raw(
+            clean,
+            main_credentials=main_creds,
+            seed_credentials=seed_creds,
+        )
+        # Only replace roles that actually exist in our registered map —
+        # legacy migration may have produced "seed"/"main" even when the
+        # caller uses different role names. Re-validate after replacement
+        # in case the replacement changed the role set.
+        parsed = parsed.model_copy(update={"accounts": accounts})
+        TestSetup.model_validate(parsed.model_dump(by_alias=True))
+
+    return parsed.model_dump(by_alias=True, exclude_none=True)
+
+
+def _build_initial_message(
+    manifest: dict,
+    config: Config,
+    accounts: dict[str, Account],
+    default_role: str | None,
+) -> str:
     """Build the first user message that bootstraps the agent."""
     parts: list[str] = []
 
@@ -133,6 +275,13 @@ def _build_initial_message(manifest: dict, config: Config) -> str:
     parts.append(f"Renderer: {manifest.get('renderer', 'unknown')}")
     parts.append(f"Project directory: {config.project}")
     parts.append(f"App URL: {config.app_url}")
+    parts.append("")
+
+    # Registered accounts the agent may use with ``http_request(as=...)``.
+    parts.append("## Registered accounts (use these in `as`)")
+    for role, account in accounts.items():
+        marker = " (default)" if role == default_role else ""
+        parts.append(f"- `{role}`{marker}: {account.email or '(no email)'}")
     parts.append("")
 
     # Include the existing (possibly broken) test_setup skeleton
@@ -147,7 +296,7 @@ def _build_initial_message(manifest: dict, config: Config) -> str:
     # Include test_data for credential templates
     td = manifest.get("test_data", {})
     if td:
-        parts.append("## test_data (available for ${test_data.X} templates)")
+        parts.append("## test_data (available for ${X} templates in URLs/payloads)")
         parts.append("```json")
         parts.append(json.dumps(td, indent=2, ensure_ascii=False))
         parts.append("```")
@@ -169,8 +318,10 @@ def _build_initial_message(manifest: dict, config: Config) -> str:
     parts.append(
         "## Instructions\n"
         "Start by exploring the project code to find the request DTOs for the "
-        "seed endpoints above. Then build and validate payloads against the "
-        "live backend. When every seed returns 2xx, call submit_result."
+        "seed endpoints above. Decide which role performs each step based on "
+        "the auth guards in the code. Validate every call against the live "
+        "backend with `http_request(..., as: <role>)`. When every step "
+        "returns 2xx, call `submit_result` with the multi-actor block."
     )
 
     return "\n".join(parts)
@@ -220,9 +371,6 @@ def run(config: Config) -> Path:
             yaml_path = p
             break
 
-    # Pre-flight: login the seed account to get a bearer token for http_request
-    from figma_audit.phases.capture_app import _api_login
-
     app_url = config.app_url
     if not app_url:
         raise ValueError("No app URL configured. Set app_url in figma-audit.yaml.")
@@ -232,32 +380,57 @@ def run(config: Config) -> Path:
         test_data["email"] = config.test_credentials.email
         test_data["otp"] = config.test_credentials.otp
 
-    test_setup = config.test_setup or manifest.get("test_setup", {})
-    seed_account = config.seed_account.model_dump() if config.seed_account.email else None
-    seed_creds = seed_account or test_data
-    token = _api_login(app_url.rstrip("/"), dict(test_setup), seed_creds)
-
-    if not token:
-        console.print("[red]Could not authenticate the seed account.[/red]")
+    # Parse the (possibly legacy) test_setup and figure out which accounts
+    # to pre-authenticate. We build a mutable dict copy of the test_setup
+    # because `_api_login` records the API prefix hint as a side effect
+    # we want to share across all account logins.
+    parsed_setup = config.test_setup_model()
+    accounts = _derive_accounts(config, parsed_setup)
+    if not accounts:
         console.print(
-            "Check that seed_account (or test_credentials) are correctly "
-            "configured in figma-audit.yaml and that the backend is reachable."
+            "[red]No accounts to authenticate.[/red] Configure "
+            "`test_setup.accounts` (or `seed_account` / `test_credentials`) "
+            "in figma-audit.yaml first."
         )
         raise SystemExit(1)
 
-    console.print("[green]Seed account authenticated.[/green]")
+    console.print(f"\n[bold]Pre-authenticating {len(accounts)} account(s)...[/bold]")
+    login_setup_dict = dict(config.test_setup or manifest.get("test_setup", {}) or {})
+    tokens = _login_accounts(app_url.rstrip("/"), login_setup_dict, accounts, console)
 
-    # Build agent context
+    if not tokens:
+        console.print(
+            "[red]None of the accounts could log in.[/red] Check credentials, "
+            "the auth_endpoint in test_setup, and the backend reachability."
+        )
+        raise SystemExit(1)
+
+    # Drop accounts whose login failed — the agent should not reference
+    # them in `as` parameters.
+    accounts = {role: acct for role, acct in accounts.items() if role in tokens}
+
+    default_role = parsed_setup.default_viewer if parsed_setup.default_viewer in tokens else None
+    if default_role is None:
+        # Prefer "main" → "seed" → first; stable order for determinism.
+        for preferred in ("main", "seed"):
+            if preferred in tokens:
+                default_role = preferred
+                break
+        else:
+            default_role = next(iter(tokens))
+
+    # Build agent context with the multi-token map
     project_dir = Path(config.project).expanduser().resolve()
     ctx = AgentContext(
         project_dir=project_dir,
         app_url=app_url.rstrip("/"),
-        auth_token=token,
+        tokens=tokens,
+        default_role=default_role,
         interactive=True,
     )
 
     # Build initial user message from manifest
-    initial_message = _build_initial_message(manifest, config)
+    initial_message = _build_initial_message(manifest, config, accounts, default_role)
 
     # Launch the agentic loop
     console.print("\n[bold]Starting setup-test-data agent...[/bold]")
@@ -275,7 +448,7 @@ def run(config: Config) -> Path:
         max_wall_seconds=600.0,
     )
 
-    # Extract and write the test_setup
+    # Extract and normalize the test_setup
     test_setup_data = result.data
     if not isinstance(test_setup_data, dict):
         console.print(
@@ -283,6 +456,16 @@ def run(config: Config) -> Path:
         )
         console.print(f"Got: {test_setup_data}")
         raise SystemExit(1)
+
+    try:
+        normalized = _normalize_agent_output(test_setup_data, accounts)
+    except Exception as e:
+        console.print(f"[red]Agent output failed validation: {e}[/red]")
+        console.print("\n[bold]Raw agent output:[/bold]")
+        console.print(yaml.dump(test_setup_data, default_flow_style=False, allow_unicode=True))
+        raise SystemExit(1) from e
+
+    normalized["default_viewer"] = normalized.get("default_viewer") or default_role
 
     console.print(
         f"\n[bold]Agent completed in {result.iterations} iterations "
@@ -292,9 +475,9 @@ def run(config: Config) -> Path:
 
     # Show the result for user review
     console.print("\n[bold]Proposed test_setup:[/bold]")
-    console.print(yaml.dump(test_setup_data, default_flow_style=False, allow_unicode=True))
+    console.print(yaml.dump(normalized, default_flow_style=False, allow_unicode=True))
 
     # Write to YAML
-    _write_test_setup_to_yaml(test_setup_data, yaml_path, console)
+    _write_test_setup_to_yaml(normalized, yaml_path, console)
 
     return yaml_path
