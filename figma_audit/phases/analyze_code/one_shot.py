@@ -1,0 +1,343 @@
+"""Phase 1 one-shot mode: send all source code in a single Claude prompt.
+
+The default mode. Fast (~2 min) and cheap (~$0.31) but the AI sees only what
+``_build_prompt`` chose to include. For complex projects with many DTOs and
+auth guards, prefer the agentic mode (see :mod:`agentic`).
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from rich.console import Console
+
+import figma_audit.phases.analyze_code as _pkg
+from figma_audit.config import Config
+from figma_audit.phases.analyze_code.discovery import (
+    API_PATTERNS,
+    MAX_TOTAL_PROMPT_SIZE,
+    PAGE_PATTERNS,
+    ROUTER_PATTERNS,
+    TOKEN_PATTERNS,
+    _detect_framework,
+    _find_files,
+    _read_file_safe,
+)
+from figma_audit.utils.claude_client import ClaudeClient
+
+console = Console()
+
+
+def _build_prompt(
+    framework: str,
+    router_files: dict[str, str],
+    page_files: dict[str, str],
+    token_files: dict[str, str],
+    api_files: dict[str, str],
+    project_dir: Path,
+) -> str:
+    """Build the user prompt with all source files."""
+    sections: list[str] = []
+    lang = "dart" if framework == "flutter" else "typescript"
+
+    sections.append(f"## Framework: {framework}\n")
+
+    # Router files (most important)
+    sections.append("## Router / Navigation Files\n")
+    for rel_path, content in router_files.items():
+        sections.append(f"### {rel_path}\n```{lang}\n{content}\n```\n")
+
+    # API / service files (for test_setup generation)
+    if api_files:
+        sections.append("## API Client / Service Files\n")
+        sections.append(
+            "(Use these to generate accurate test_setup with real endpoints and payloads)\n"
+        )
+        total_size = sum(len(s) for s in sections)
+        for rel_path, content in api_files.items():
+            entry = f"### {rel_path}\n```{lang}\n{content}\n```\n"
+            if total_size + len(entry) > MAX_TOTAL_PROMPT_SIZE // 2:
+                break
+            sections.append(entry)
+            total_size += len(entry)
+
+    # Design token files
+    if token_files:
+        sections.append("## Design Token Files\n")
+        for rel_path, content in token_files.items():
+            sections.append(f"### {rel_path}\n```{lang}\n{content}\n```\n")
+
+    # Page files — include as many as we can fit
+    total_size = sum(len(s) for s in sections)
+    sections.append("## Page / Screen Files\n")
+    for rel_path, content in page_files.items():
+        entry = f"### {rel_path}\n```dart\n{content}\n```\n"
+        if total_size + len(entry) > MAX_TOTAL_PROMPT_SIZE:
+            included = len([s for s in sections if s.startswith("### ")])
+            remaining = len(page_files) - included
+            sections.append(
+                f"\n[Remaining {remaining} page files omitted for size. Listed paths only:]\n"
+            )
+            for rp in page_files:
+                sections.append(f"- {rp}\n")
+            break
+        sections.append(entry)
+        total_size += len(entry)
+
+    return "\n".join(sections)
+
+
+SYSTEM_PROMPT = """\
+You are a senior software engineer analyzing a codebase to produce a structured manifest \
+of all pages/screens for a Figma design audit tool.
+
+Your task: analyze the provided router, page files, and design tokens to produce a complete \
+JSON manifest describing every navigable page in the application.
+
+Rules:
+- Output ONLY valid JSON, no markdown, no commentary.
+- Temperature 0: be precise and factual, only include what the code explicitly shows.
+- For navigation_steps: describe the Playwright actions needed to reach \
+each page from the app root. \
+**DEFAULT STRATEGY: direct URL navigation.** \
+Modern SPA/Flutter-web apps support deep links on EVERY route — clicking through \
+the UI is slower, brittle, and often fails on Flutter CanvasKit where DOM events \
+are unreliable. Prefer a single `navigate` step to the full route whenever possible. \
+\
+Rules for picking navigation style: \
+\
+(1) Route has NO path parameters: generate EXACTLY ONE step: \
+`[{"action": "navigate", "url": "<the_route>"}]`. \
+Do NOT click tabs, do NOT click menu items, do NOT go via a list page. The app \
+router resolves the deep link directly. \
+\
+(2) Route has ONE OR MORE path parameters (anything with `:param` in the path \
+pattern from the router): substitute each `:param` with a `${test_data.<key>}` \
+template that will be filled at capture time. \
+Example for a route `/<entity>/:id` → \
+`[{"action": "navigate", "url": "/<entity>/${test_data.<entity>_id}"}]`. \
+The `test_setup.seed_items` block you generate separately must create real \
+entities before capture and expose their IDs via matching `test_data_key` \
+entries. Use those keys to build the URL. \
+For constant-enum parameters (e.g. a `:type` param whose valid values are a \
+fixed enum from the code), use one concrete enum value directly in the URL. \
+\
+(3) ONLY use UI-click navigation (multi-step) when the route genuinely cannot be \
+reached by URL — e.g. the target is a modal/dialog with no route, or the app uses \
+opaque encrypted IDs in URLs that test_setup cannot produce. In that narrow case, \
+list the clicks: `[{"action": "navigate", "url": "/"}, {"action": "click", \
+"text": "Button"}, {"action": "wait", "timeout": 1500}]`. \
+\
+(4) For capturable_states that depend on data state (e.g. detail page "available" \
+vs "taken"): use `test_setup.take_item` to transition a seeded item between states \
+via API, then navigate to separate IDs — NOT UI clicks.
+- For form_fields: list all user-input fields visible on the page.
+- For interactive_states: list distinct visual states \
+(loading, empty, populated, error, wizard steps).
+- For capturable_states: list ONLY the visual states that can be reached \
+sequentially via Playwright browser automation (wizard steps, tab switches). \
+Exclude transient states (loading, error, success). \
+Each state's delta_steps are INCREMENTAL actions from the PREVIOUS state (not cumulative). \
+The first state's delta_steps is empty (page already loaded after navigation_steps). \
+States MUST be ordered in the sequence they can be reached. \
+Omit capturable_states for pages with only one visual state. \
+For wizards: EVERY step must be a capturable_state (not just 2). If a wizard has 5 steps, \
+generate 5 capturable_states. \
+For pages with tabs: each tab is a capturable_state. \
+For registration flows with multiple pages: each page is on a separate route, \
+but generate capturable_states for sub-steps within each page (e.g. form empty vs filled). \
+IMPORTANT for delta_steps actions: the app may use Flutter CanvasKit which has NO DOM elements. \
+Use {"action": "click", "text": "Button Label"} — the automation will try \
+accessibility roles (button, link, tab) first, then text match, then coordinates. \
+For form fields, use {"action": "fill", "label": "Field Label", "value": "..."} \
+which uses accessibility labels. \
+Never rely on CSS selectors for Flutter CanvasKit apps.
+- For auth_required: this is CRITICAL — getting it wrong causes the audit \
+tool to capture the wrong screen (silent redirect to login). Do NOT infer this \
+from the page file alone. Determine it by inspecting the ROUTER configuration: \
+look for redirect callbacks (GoRouter `redirect:`, Navigator guards, route \
+observers, AuthGuard middleware, `requireAuth`, `loggedIn` checks). \
+A route is `auth_required: true` if AND ONLY IF: \
+(a) navigating to it while logged-out is intercepted and redirected elsewhere \
+(typically to /signin, /login, /welcome), OR \
+(b) the page itself reads user state and redirects on null user. \
+A route is `auth_required: false` if it is reachable WITHOUT a session — \
+this includes /welcome, /signin, /login, password-reset pages, AND every step \
+of a registration flow (the user is still anonymous during registration). \
+Conversely, list/detail pages, profile pages, settings, payment pages, and \
+anything reading user-scoped data are almost always `auth_required: true`. \
+When in doubt because the router code is ambiguous, prefer `auth_required: true` \
+for any route that is NOT explicitly listed as a public route in the router.
+- For test_data: suggest realistic test values for forms \
+(use plausible phone numbers, addresses, and names appropriate for the app's locale).
+- Extract design tokens from the theme/token files into a structured format.
+- For test_setup: analyze the API client/service files to find the EXACT endpoints, \
+HTTP methods, request payloads, and authentication flow used by the app. \
+Include auth_endpoint (the login/verify endpoint), auth_payload (with ${test_data.key} \
+templates for credentials), auth_otp_request_endpoint (if the auth flow has a separate \
+OTP request step), auth_token_path (dotted path to the token in the response), \
+seed_items (API calls to create test data, with exact endpoint paths and payload structure \
+from the code), take_item (to transition an item to a different state), and cleanup_endpoint. \
+CRITICAL: use the real endpoints and payload field names from the API client code — do NOT guess.
+
+JSON Schema to follow:
+{
+  "framework": "flutter|react|vue|angular|nextjs",
+  "renderer": "canvaskit|html|dom",
+  "pages": [
+    {
+      "id": "string (snake_case unique identifier)",
+      "route": "string (URL path pattern)",
+      "name": "string (class/component name)",
+      "file": "string (relative file path)",
+      "auth_required": "boolean",
+      "description": "string (what the page does, in English)",
+      "params": [{"name": "string", "type": "string", "optional": "boolean"}],
+      "required_state": {
+        "description": "string (what state/data is needed)",
+        "data_dependencies": ["string"]
+      },
+      "navigation_steps": [
+        {"action": "navigate|click|fill|wait|screenshot", "url?": "string", \
+"selector?": "string", "value?": "string", "name?": "string", "timeout?": "number"}
+      ],
+      "form_fields": [
+        {"name": "string", "type": "text|tel|email|address|datetime|select|checkbox|number", \
+"step?": "number"}
+      ],
+      "interactive_states": ["string"],
+      "capturable_states": [
+        {
+          "state_id": "string (snake_case, matches an interactive_states entry)",
+          "description": "string (what is visible in this state, in English)",
+          "delta_steps": [
+            {"action": "navigate|click|fill|wait|wait_for_url", "url?": "string", \
+"selector?": "string", "text?": "string", "value?": "string", "timeout?": "number"}
+          ]
+        }
+      ]
+    }
+  ],
+  "design_tokens": {
+    "source_file": "string",
+    "colors": {"token_name": "#hexvalue"},
+    "fonts": {"family": "string", "weights": [400, 500, 600, 700]},
+    "spacing_scale": [4, 8, 12, 16, ...],
+    "border_radius": {"sm": 4, "md": 8, "lg": 12, "xl": 16}
+  },
+  "test_data": {
+    "phone": "+33612345678",
+    "otp": "1234",
+    "email": "test@example.com"
+  },
+  "test_setup": {
+    "description": "API calls to create test data before capture. Optional.",
+    "auth_endpoint": "/api/public/auth/login",
+    "auth_payload": {"email": "${test_data.email}", "code": "${test_data.otp}"},
+    "auth_token_path": "accessToken",
+    "seed_items": [
+      {
+        "endpoint": "/api/items",
+        "method": "POST",
+        "payload": {"name": "Test item", "status": "available"},
+        "id_path": "id",
+        "test_data_key": "item_id"
+      }
+    ],
+    "take_item": {
+      "endpoint": "/api/items/${item_id}/take",
+      "method": "POST",
+      "test_data_key": "item_taken_id"
+    },
+    "cleanup_endpoint": "/api/items/${item_id}/archive"
+  }
+}
+"""
+
+
+def _run_one_shot(config: Config) -> Path:
+    """Run Phase 1 in one-shot mode (original behavior)."""
+    project_dir = Path(config.project).expanduser().resolve()
+    if not project_dir.exists():
+        raise FileNotFoundError(f"Project directory not found: {project_dir}")
+
+    output_dir = config.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = output_dir / "pages_manifest.json"
+
+    framework = _detect_framework(project_dir)
+    console.print(f"[bold]Framework detected: {framework}[/bold]")
+
+    if framework == "unknown":
+        raise ValueError(
+            f"Could not detect framework in {project_dir}. "
+            "Supported: flutter, react, vue, angular, nextjs."
+        )
+
+    router_paths = _find_files(project_dir, ROUTER_PATTERNS.get(framework, []))
+    page_paths = _find_files(project_dir, PAGE_PATTERNS.get(framework, []))
+    token_paths = _find_files(project_dir, TOKEN_PATTERNS.get(framework, []))
+    api_paths = _find_files(project_dir, API_PATTERNS.get(framework, []))
+
+    console.print(f"  Router files: {len(router_paths)}")
+    console.print(f"  Page files:   {len(page_paths)}")
+    console.print(f"  Token files:  {len(token_paths)}")
+    console.print(f"  API files:    {len(api_paths)}")
+
+    if not router_paths:
+        raise FileNotFoundError(
+            f"No router files found in {project_dir}. "
+            f"Searched patterns: {ROUTER_PATTERNS.get(framework, [])}"
+        )
+
+    def _read_files(paths: list[Path]) -> dict[str, str]:
+        result = {}
+        for p in paths:
+            content = _read_file_safe(p)
+            if content:
+                rel = str(p.relative_to(project_dir))
+                result[rel] = content
+        return result
+
+    router_files = _read_files(router_paths)
+    page_files = _read_files(page_paths)
+    token_files = _read_files(token_paths)
+    api_files = _read_files(api_paths)
+
+    total_chars = (
+        sum(len(v) for v in router_files.values())
+        + sum(len(v) for v in page_files.values())
+        + sum(len(v) for v in token_files.values())
+        + sum(len(v) for v in api_files.values())
+    )
+    console.print(f"  Total source: {total_chars:,} chars")
+
+    user_prompt = _build_prompt(
+        framework, router_files, page_files, token_files, api_files, project_dir
+    )
+    console.print(f"  Prompt size: {len(user_prompt):,} chars")
+    console.print("[bold]Sending to Claude for analysis (one-shot)...[/bold]")
+
+    client = ClaudeClient(api_key=config.anthropic_api_key)
+    manifest_data = client.analyze(
+        system_prompt=SYSTEM_PROMPT,
+        user_prompt=user_prompt,
+        max_tokens=16384,
+        phase="analyze",
+    )
+    # Expose for cost-tracking by callers via figma_audit.phases.analyze_code._last_client
+    _pkg._last_client = client
+    client.print_usage()
+
+    with open(manifest_path, "w") as f:
+        json.dump(manifest_data, f, indent=2, ensure_ascii=False)
+
+    pages = manifest_data.get("pages", [])
+    tokens = manifest_data.get("design_tokens", {})
+    console.print(f"\n[bold green]Manifest saved to {manifest_path}[/bold green]")
+    console.print(f"  {len(pages)} pages identified")
+    console.print(f"  {len(tokens.get('colors', {}))} color tokens")
+    console.print(f"  Framework: {manifest_data.get('framework', '?')}")
+
+    return manifest_path
