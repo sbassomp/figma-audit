@@ -276,6 +276,53 @@ def _run_pipeline_bg(
         set_progress(None)
 
 
+def _compute_previous_run_stats(
+    session: Session, project_id: int, current_run_id: int
+) -> dict | None:
+    """Compute the same stat block as run_detail() for the previous completed run.
+
+    Used by run_detail() to surface +N / -M trend deltas next to each stat.
+    Returns ``None`` if there is no prior completed run (first run for this
+    project, or the current run is the only one).
+    """
+    from figma_audit.db.models import Capture
+
+    prev = session.exec(
+        select(Run)
+        .where(
+            Run.project_id == project_id,
+            Run.id < current_run_id,
+            Run.status == "completed",
+        )
+        .order_by(Run.id.desc())
+    ).first()
+    if not prev:
+        return None
+
+    captures = session.exec(select(Capture).where(Capture.run_id == prev.id)).all()
+    captures_ok = sum(1 for c in captures if c.screenshot_path and not c.error)
+    captures_failed = sum(1 for c in captures if c.error)
+
+    discs = session.exec(select(Discrepancy).where(Discrepancy.run_id == prev.id)).all()
+    by_severity = {"critical": 0, "important": 0, "minor": 0}
+    n_dismissed = 0
+    for d in discs:
+        if d.status in {"ignored", "wontfix"}:
+            n_dismissed += 1
+            continue
+        if d.category == "MATCHING_ERROR":
+            continue
+        by_severity[d.severity] = by_severity.get(d.severity, 0) + 1
+
+    return {
+        "run_id": prev.id,
+        "total_discrepancies": len(discs) - n_dismissed,
+        "captures_ok": captures_ok,
+        "captures_failed": captures_failed,
+        "by_severity": by_severity,
+    }
+
+
 @router.get("/projects/{slug}/runs/{run_id}", response_class=HTMLResponse)
 def run_detail(
     request: Request,
@@ -385,6 +432,12 @@ def run_detail(
     if run.started_at and run.finished_at:
         run_duration = (run.finished_at - run.started_at).total_seconds()
 
+    # Find the previous COMPLETED run for trend deltas (smaller id, same project,
+    # not failed, not the current one). We compute a quick stats dict for it
+    # using the same logic as the current run, so the template can show
+    # +N / -M badges next to each value.
+    previous_stats = _compute_previous_run_stats(session, project.id, run_id)
+
     return templates.TemplateResponse(
         request,
         "run.html",
@@ -417,6 +470,7 @@ def run_detail(
                 "by_severity": by_severity,
                 "by_category": by_category,
             },
+            "previous_stats": previous_stats,
             "failed_captures": [
                 {
                     "page_id": c.page_id,

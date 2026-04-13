@@ -17,19 +17,45 @@
 </div>
 {% endif %}
 
+{#
+  Trend macro: render a +N / -M badge comparing current vs previous run.
+  `direction` controls semantic color:
+    "up_good"   → going up is good (more captures OK)
+    "down_good" → going down is good (fewer discrepancies)
+#}
+{% macro trend(current, previous, direction='down_good') %}
+  {% if previous is not none and current != previous %}
+    {% set delta = current - previous %}
+    {% if direction == 'up_good' %}
+      {% set good = delta > 0 %}
+    {% else %}
+      {% set good = delta < 0 %}
+    {% endif %}
+    <span class="trend-badge {{ 'trend-good' if good else 'trend-bad' }}" title="Previous run #{{ previous_stats.run_id }}: {{ previous }}">
+      {{ '+' if delta > 0 else '' }}{{ delta }}
+    </span>
+  {% endif %}
+{% endmacro %}
+
 <div class="stats-grid">
   <div class="stat-card{% if stats.captures_failed %} stat-warning{% endif %}">
-    <div class="stat-value">{{ stats.captures_ok }}<span class="text-sm text-muted">/{{ stats.total_captures }}</span></div>
+    <div class="stat-value">{{ stats.captures_ok }}<span class="text-sm text-muted">/{{ stats.total_captures }}</span>
+      {% if previous_stats %}{{ trend(stats.captures_ok, previous_stats.captures_ok, 'up_good') }}{% endif %}
+    </div>
     <div class="stat-label">Captures OK</div>
   </div>
   {% if stats.captures_failed %}
   <div class="stat-card stat-warning">
-    <div class="stat-value" style="color: #f59e0b;">{{ stats.captures_failed }}</div>
+    <div class="stat-value" style="color: #f59e0b;">{{ stats.captures_failed }}
+      {% if previous_stats %}{{ trend(stats.captures_failed, previous_stats.captures_failed, 'down_good') }}{% endif %}
+    </div>
     <div class="stat-label">Nav. failures</div>
   </div>
   {% endif %}
   <div class="stat-card">
-    <div class="stat-value">{{ stats.total_discrepancies }}</div>
+    <div class="stat-value">{{ stats.total_discrepancies }}
+      {% if previous_stats %}{{ trend(stats.total_discrepancies, previous_stats.total_discrepancies, 'down_good') }}{% endif %}
+    </div>
     <div class="stat-label">Active discrepancies</div>
   </div>
   {% if stats.n_dismissed %}
@@ -39,15 +65,21 @@
   </div>
   {% endif %}
   <div class="stat-card stat-critical">
-    <div class="stat-value">{{ stats.by_severity.critical or 0 }}</div>
+    <div class="stat-value">{{ stats.by_severity.critical or 0 }}
+      {% if previous_stats %}{{ trend(stats.by_severity.critical or 0, previous_stats.by_severity.critical or 0, 'down_good') }}{% endif %}
+    </div>
     <div class="stat-label">Critical</div>
   </div>
   <div class="stat-card stat-important">
-    <div class="stat-value">{{ stats.by_severity.important or 0 }}</div>
+    <div class="stat-value">{{ stats.by_severity.important or 0 }}
+      {% if previous_stats %}{{ trend(stats.by_severity.important or 0, previous_stats.by_severity.important or 0, 'down_good') }}{% endif %}
+    </div>
     <div class="stat-label">Important</div>
   </div>
   <div class="stat-card stat-minor">
-    <div class="stat-value">{{ stats.by_severity.minor or 0 }}</div>
+    <div class="stat-value">{{ stats.by_severity.minor or 0 }}
+      {% if previous_stats %}{{ trend(stats.by_severity.minor or 0, previous_stats.by_severity.minor or 0, 'down_good') }}{% endif %}
+    </div>
     <div class="stat-label">Minor</div>
   </div>
   {% if execution and execution.total_cost %}
