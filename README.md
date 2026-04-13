@@ -1,5 +1,12 @@
 # figma-audit
 
+[![PyPI version](https://img.shields.io/pypi/v/figma-audit.svg)](https://pypi.org/project/figma-audit/)
+[![Python versions](https://img.shields.io/pypi/pyversions/figma-audit.svg)](https://pypi.org/project/figma-audit/)
+[![Downloads](https://static.pepy.tech/badge/figma-audit/month)](https://pepy.tech/project/figma-audit)
+[![Total downloads](https://static.pepy.tech/badge/figma-audit)](https://pepy.tech/project/figma-audit)
+[![CI](https://github.com/sbassomp/figma-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/sbassomp/figma-audit/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Automated design conformity audits: compare your Figma designs against your deployed app and get a detailed discrepancy report.**
 
 ## The problem
