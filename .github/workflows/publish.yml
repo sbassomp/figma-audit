@@ -13,7 +13,6 @@ on:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    environment: pypi
     permissions:
       contents: read
     steps:
@@ -38,4 +37,16 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*
+        # --skip-existing: do not fail if this version was already uploaded
+        # (e.g. a prior manual twine upload). Without this, re-running the
+        # workflow for a release that already shipped would error out.
+        # If TWINE_PASSWORD is empty, the step fails with a clear message
+        # instead of uploading anonymously.
+        run: |
+          if [ -z "${TWINE_PASSWORD}" ]; then
+            echo "::error::PYPI_API_TOKEN secret is not set in the repository."
+            echo "Configure it at:"
+            echo "  https://github.com/${GITHUB_REPOSITORY}/settings/secrets/actions"
+            exit 1
+          fi
+          twine upload --skip-existing dist/*
