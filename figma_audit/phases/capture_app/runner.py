@@ -64,9 +64,7 @@ async def _capture_route(
                 console.print(f"    [red]{placeholder_error}[/red]")
                 break
             except Exception as e:
-                console.print(
-                    f"    [yellow]Nav step failed: {step.get('action')} -- {e}[/yellow]"
-                )
+                console.print(f"    [yellow]Nav step failed: {step.get('action')} -- {e}[/yellow]")
     else:
         # Simple direct navigation
         url = app_url.rstrip("/") + route
@@ -145,9 +143,7 @@ async def _capture_route(
             state_screenshot_rel = f"app_screenshots/{state_slug}.png"
             state_screenshot_path = screenshots_dir / f"{state_slug}.png"
 
-            console.print(
-                f"    State {state_idx}/{len(capturable_states)}: {state_id}..."
-            )
+            console.print(f"    State {state_idx}/{len(capturable_states)}: {state_id}...")
 
             try:
                 for step in delta_steps:
@@ -177,9 +173,7 @@ async def _capture_route(
     return result, styles
 
 
-def _dedupe_captures(
-    all_results: list[dict], screenshots_dir: Path
-) -> tuple[int, int]:
+def _dedupe_captures(all_results: list[dict], screenshots_dir: Path) -> tuple[int, int]:
     """Global silent-redirect detection.
 
     Hashes every screenshot file (top-level captures + wizard states) and
@@ -315,9 +309,7 @@ async def _run_async(config: Config) -> Path:
             mapped_page_ids.add(pid)
 
     pages_to_capture = [pages_by_id[pid] for pid in mapped_page_ids if pid in pages_by_id]
-    console.print(
-        f"[bold]Capturing {len(pages_to_capture)} unique pages from {app_url}[/bold]"
-    )
+    console.print(f"[bold]Capturing {len(pages_to_capture)} unique pages from {app_url}[/bold]")
     console.print(f"  Renderer: {renderer}")
 
     if renderer == "canvaskit":
@@ -452,9 +444,7 @@ async def _run_async(config: Config) -> Path:
 
         # ── Phase C: Capture auth-required pages (after login) ────────
         if auth_pages:
-            console.print(
-                f"\n  [bold]Capturing {len(auth_pages)} authenticated page(s)...[/bold]"
-            )
+            console.print(f"\n  [bold]Capturing {len(auth_pages)} authenticated page(s)...[/bold]")
             await _capture_batch(auth_pages)
 
         await browser.close()

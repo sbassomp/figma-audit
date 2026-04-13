@@ -81,9 +81,7 @@ def _screen_card_html(s: Screen, slug: str) -> str:
             f"Obsolete</button>"
         )
     elif s.status == "obsolete":
-        btn = (
-            f'<button class="btn btn-sm" hx-post="{scr_base}/current" {scr_tgt}>Restore</button>'
-        )
+        btn = f'<button class="btn btn-sm" hx-post="{scr_base}/current" {scr_tgt}>Restore</button>'
     else:
         btn = ""
 

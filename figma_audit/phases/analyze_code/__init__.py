@@ -82,9 +82,7 @@ def run(config: Config):
         or "one-shot"
     )
     if mode == "agentic":
-        console.print(
-            "[bold cyan]Mode: agentic (agent explores codebase with tools)[/bold cyan]"
-        )
+        console.print("[bold cyan]Mode: agentic (agent explores codebase with tools)[/bold cyan]")
         return _run_agentic(config)
     return _run_one_shot(config)
 

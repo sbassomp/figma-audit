@@ -98,11 +98,13 @@ def _redact_sensitive(obj: Any) -> Any:
 # read_file
 # ─────────────────────────────────────────────────────────────────────
 
+
 def _run_read_file(params: dict, ctx: AgentContext) -> dict:
     rel_path = params.get("path", "")
     offset = int(params.get("offset", 0) or 0)
-    max_bytes = min(int(params.get("max_bytes", ctx.max_file_bytes) or ctx.max_file_bytes),
-                    ctx.max_file_bytes)
+    max_bytes = min(
+        int(params.get("max_bytes", ctx.max_file_bytes) or ctx.max_file_bytes), ctx.max_file_bytes
+    )
 
     if not rel_path or rel_path.startswith("/") or ".." in Path(rel_path).parts:
         return {"error": f"invalid path: {rel_path!r} (must be relative, no '..')"}
@@ -175,8 +177,10 @@ READ_FILE = Tool(
 # grep_code
 # ─────────────────────────────────────────────────────────────────────
 
-def _grep_with_rg(pattern: str, glob: str, case_insensitive: bool, max_results: int,
-                  cwd: Path) -> tuple[list[str], str | None]:
+
+def _grep_with_rg(
+    pattern: str, glob: str, case_insensitive: bool, max_results: int, cwd: Path
+) -> tuple[list[str], str | None]:
     """Try ripgrep first; return (lines, error_or_None)."""
     cmd = [
         "rg",
@@ -215,8 +219,9 @@ def _grep_with_rg(pattern: str, glob: str, case_insensitive: bool, max_results: 
     return result.stdout.splitlines()[:max_results], None
 
 
-def _grep_with_python(pattern: str, glob: str, case_insensitive: bool, max_results: int,
-                      cwd: Path) -> list[str]:
+def _grep_with_python(
+    pattern: str, glob: str, case_insensitive: bool, max_results: int, cwd: Path
+) -> list[str]:
     """Pure-Python fallback when ripgrep is unavailable."""
     flags = re.IGNORECASE if case_insensitive else 0
     try:
@@ -253,20 +258,19 @@ def _run_grep_code(params: dict, ctx: AgentContext) -> dict:
     pattern = params.get("pattern", "")
     glob = params.get("file_glob", "**/*") or "**/*"
     case_insensitive = bool(params.get("case_insensitive", False))
-    max_results = min(int(params.get("max_results", ctx.max_grep_hits) or ctx.max_grep_hits),
-                      ctx.max_grep_hits)
+    max_results = min(
+        int(params.get("max_results", ctx.max_grep_hits) or ctx.max_grep_hits), ctx.max_grep_hits
+    )
 
     if not pattern:
         return {"error": "pattern is required"}
     if glob.startswith("/") or ".." in glob:
         return {"error": f"invalid glob: {glob!r}"}
 
-    lines, rg_error = _grep_with_rg(pattern, glob, case_insensitive, max_results,
-                                    ctx.project_dir)
+    lines, rg_error = _grep_with_rg(pattern, glob, case_insensitive, max_results, ctx.project_dir)
     used = "rg"
     if rg_error == "rg not installed":
-        lines = _grep_with_python(pattern, glob, case_insensitive, max_results,
-                                  ctx.project_dir)
+        lines = _grep_with_python(pattern, glob, case_insensitive, max_results, ctx.project_dir)
         used = "python"
     elif rg_error:
         return {"error": rg_error, "tool": "rg"}
@@ -301,8 +305,7 @@ GREP_CODE = Tool(
             "file_glob": {
                 "type": "string",
                 "description": (
-                    "Glob limiting which files to search, e.g. '**/*.dart'. "
-                    "Default '**/*'."
+                    "Glob limiting which files to search, e.g. '**/*.dart'. Default '**/*'."
                 ),
             },
             "case_insensitive": {
@@ -324,12 +327,14 @@ GREP_CODE = Tool(
 # list_files
 # ─────────────────────────────────────────────────────────────────────
 
+
 def _run_list_files(params: dict, ctx: AgentContext) -> dict:
     rel_dir = params.get("directory", ".") or "."
     recursive = bool(params.get("recursive", False))
-    max_entries = min(int(params.get("max_entries", ctx.max_list_entries)
-                          or ctx.max_list_entries),
-                      ctx.max_list_entries)
+    max_entries = min(
+        int(params.get("max_entries", ctx.max_list_entries) or ctx.max_list_entries),
+        ctx.max_list_entries,
+    )
 
     if rel_dir.startswith("/") or ".." in Path(rel_dir).parts:
         return {"error": f"invalid directory: {rel_dir!r}"}
@@ -404,6 +409,7 @@ LIST_FILES = Tool(
 # http_request (Feature A only — never registered for Phase 1 agent)
 # ─────────────────────────────────────────────────────────────────────
 
+
 def _run_http_request(params: dict, ctx: AgentContext) -> dict:
     if ctx.app_url is None:
         return {"error": "http_request not available in this context (no app_url configured)"}
@@ -472,10 +478,7 @@ def _run_http_request(params: dict, ctx: AgentContext) -> dict:
         parsed_body = resp.text[:8000]
 
     # Only echo a few headers, all redacted
-    safe_headers = {
-        k: v for k, v in resp.headers.items()
-        if not SENSITIVE_KEY_PATTERN.search(k)
-    }
+    safe_headers = {k: v for k, v in resp.headers.items() if not SENSITIVE_KEY_PATTERN.search(k)}
 
     return {
         "status": resp.status_code,
@@ -525,6 +528,7 @@ HTTP_REQUEST = Tool(
 # ask_user
 # ─────────────────────────────────────────────────────────────────────
 
+
 def _run_ask_user(params: dict, ctx: AgentContext) -> dict:
     question = params.get("question", "").strip()
     if not question:
@@ -534,10 +538,7 @@ def _run_ask_user(params: dict, ctx: AgentContext) -> dict:
     if not ctx.interactive:
         return {
             "answer": None,
-            "note": (
-                "non-interactive mode: cannot prompt the user. "
-                "Proceed with your best guess."
-            ),
+            "note": ("non-interactive mode: cannot prompt the user. Proceed with your best guess."),
         }
 
     # Anti-begging: refuse if the same question was asked recently.
@@ -606,6 +607,7 @@ ASK_USER = Tool(
 # ─────────────────────────────────────────────────────────────────────
 # submit_result — the canonical "I am done" signal
 # ─────────────────────────────────────────────────────────────────────
+
 
 def _run_submit_result(params: dict, ctx: AgentContext) -> dict:
     """Marker tool: the loop runner intercepts this call before invoking _run."""

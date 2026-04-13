@@ -137,9 +137,7 @@ class TestHttpRequest:
 
     def test_auth_disabled(self, http_server, ctx: AgentContext) -> None:
         http_server.responses[("GET", "/api/public")] = (200, {})
-        HTTP_REQUEST.run(
-            {"method": "GET", "path": "/api/public", "use_auth": False}, ctx
-        )
+        HTTP_REQUEST.run({"method": "GET", "path": "/api/public", "use_auth": False}, ctx)
         assert "Authorization" not in http_server.received[0]["headers"]
 
     def test_400_response_returned(self, http_server, ctx: AgentContext) -> None:
@@ -147,9 +145,7 @@ class TestHttpRequest:
             400,
             {"detail": "field 'name' is required"},
         )
-        result = HTTP_REQUEST.run(
-            {"method": "POST", "path": "/api/items", "body": {}}, ctx
-        )
+        result = HTTP_REQUEST.run({"method": "POST", "path": "/api/items", "body": {}}, ctx)
         assert result["status"] == 400
         assert "field 'name'" in str(result["body"])
 
@@ -158,22 +154,16 @@ class TestHttpRequest:
             200,
             {"user": "alice", "accessToken": "SECRET123"},
         )
-        result = HTTP_REQUEST.run(
-            {"method": "POST", "path": "/api/login", "body": {}}, ctx
-        )
+        result = HTTP_REQUEST.run({"method": "POST", "path": "/api/login", "body": {}}, ctx)
         # accessToken matches the "token" pattern → redacted
         assert result["body"]["accessToken"] == "<redacted>"
 
     def test_rejects_absolute_url(self, ctx: AgentContext) -> None:
-        result = HTTP_REQUEST.run(
-            {"method": "GET", "path": "https://evil.com/steal"}, ctx
-        )
+        result = HTTP_REQUEST.run({"method": "GET", "path": "https://evil.com/steal"}, ctx)
         assert "error" in result
 
     def test_rejects_traversal(self, ctx: AgentContext) -> None:
-        result = HTTP_REQUEST.run(
-            {"method": "GET", "path": "/api/../../../etc/passwd"}, ctx
-        )
+        result = HTTP_REQUEST.run({"method": "GET", "path": "/api/../../../etc/passwd"}, ctx)
         assert "error" in result
 
     def test_rejects_when_no_app_url(self, tmp_path: Path) -> None:
@@ -195,9 +185,7 @@ class TestHttpRequest:
             assert result["status"] == 400
         # Third must be refused before hitting the network
         before_count = len(http_server.received)
-        result = HTTP_REQUEST.run(
-            {"method": "POST", "path": "/api/items", "body": {"x": 1}}, ctx
-        )
+        result = HTTP_REQUEST.run({"method": "POST", "path": "/api/items", "body": {"x": 1}}, ctx)
         assert result["status"] == 0
         assert "REFUSED" in result["error"]
         assert len(http_server.received) == before_count  # no new server hit
@@ -205,9 +193,7 @@ class TestHttpRequest:
     def test_different_payload_not_blocked(self, http_server, ctx: AgentContext) -> None:
         http_server.responses[("POST", "/api/items")] = (400, {"error": "x"})
         for x in range(5):
-            HTTP_REQUEST.run(
-                {"method": "POST", "path": "/api/items", "body": {"x": x}}, ctx
-            )
+            HTTP_REQUEST.run({"method": "POST", "path": "/api/items", "body": {"x": x}}, ctx)
         # All 5 should hit the server because the body is different each time
         assert len(http_server.received) == 5
 
@@ -244,11 +230,10 @@ class TestAskUser:
         assert result["answer"] is None
         assert "non-interactive" in result["note"]
 
-    def test_interactive_with_prompt(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_interactive_with_prompt(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         ctx = AgentContext(project_dir=tmp_path, interactive=True)
         import click as _click
+
         monkeypatch.setattr(_click, "prompt", lambda *a, **k: "yes")
         result = ASK_USER.run({"question": "do the thing?"}, ctx)
         assert result["answer"] == "yes"
@@ -258,17 +243,15 @@ class TestAskUser:
     ) -> None:
         ctx = AgentContext(project_dir=tmp_path, interactive=True)
         import click as _click
+
         monkeypatch.setattr(_click, "prompt", lambda *a, **k: "2")
-        result = ASK_USER.run(
-            {"question": "which?", "choices": ["alpha", "beta", "gamma"]}, ctx
-        )
+        result = ASK_USER.run({"question": "which?", "choices": ["alpha", "beta", "gamma"]}, ctx)
         assert result["answer"] == "beta"
 
-    def test_anti_begging(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_anti_begging(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         ctx = AgentContext(project_dir=tmp_path, interactive=True)
         import click as _click
+
         monkeypatch.setattr(_click, "prompt", lambda *a, **k: "yes")
         # First time: works
         result1 = ASK_USER.run({"question": "same q"}, ctx)

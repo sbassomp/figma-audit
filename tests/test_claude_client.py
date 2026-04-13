@@ -156,4 +156,5 @@ class TestPricingTable:
 def pytest_approx(expected: float, rel: float = 1e-6) -> object:
     """Helper for floating-point comparisons in assertions (avoids importing pytest.approx)."""
     import pytest as _pytest
+
     return _pytest.approx(expected, rel=rel)

@@ -186,9 +186,7 @@ def _run_pipeline_bg(
                         with open(mapping_path) as f:
                             existing = yaml.safe_load(f)
                         if existing and existing.get("verified"):
-                            matched = sum(
-                                1 for m in existing.get("mappings", []) if m.get("route")
-                            )
+                            matched = sum(1 for m in existing.get("mappings", []) if m.get("route"))
                             _step(f"Existing mapping ({matched} matches) — skip")
                             progress.finish_phase(detail=f"{matched} matches (cached)")
                             _save_progress()
@@ -212,9 +210,7 @@ def _run_pipeline_bg(
                             )
                     matched = sum(1 for m in data.get("mappings", []) if m.get("route"))
                     cost, tokens = _phase_cost("match")
-                    progress.finish_phase(
-                        detail=f"{matched} matches", cost=cost, tokens=tokens
-                    )
+                    progress.finish_phase(detail=f"{matched} matches", cost=cost, tokens=tokens)
 
                 elif phase_name == "capture":
                     _step("Login + creating test data...")
@@ -240,9 +236,7 @@ def _run_pipeline_bg(
                     if disc_path.exists():
                         with open(disc_path) as f:
                             n_discs = (
-                                json.load(f)
-                                .get("statistics", {})
-                                .get("total_discrepancies", 0)
+                                json.load(f).get("statistics", {}).get("total_discrepancies", 0)
                             )
                     progress.finish_phase(
                         detail=f"{n_discs} discrepancies", cost=cost, tokens=tokens
@@ -336,9 +330,7 @@ def run_detail(
     if not project:
         return RedirectResponse("/")
 
-    run = session.exec(
-        select(Run).where(Run.id == run_id, Run.project_id == project.id)
-    ).first()
+    run = session.exec(select(Run).where(Run.id == run_id, Run.project_id == project.id)).first()
     if not run:
         return RedirectResponse(f"/projects/{slug}")
 
@@ -498,9 +490,7 @@ def comparison_view(
     if not project:
         return RedirectResponse("/")
 
-    run = session.exec(
-        select(Run).where(Run.id == run_id, Run.project_id == project.id)
-    ).first()
+    run = session.exec(select(Run).where(Run.id == run_id, Run.project_id == project.id)).first()
     if not run:
         return RedirectResponse(f"/projects/{slug}")
 

@@ -130,9 +130,7 @@ class RunProgress:
                     "duration": next((r.duration for r in self.phase_results if r.name == p), None),
                     "detail": next((r.detail for r in self.phase_results if r.name == p), None),
                     "cost": next((r.cost for r in self.phase_results if r.name == p), None),
-                    "tokens": next(
-                        (r.tokens for r in self.phase_results if r.name == p), None
-                    ),
+                    "tokens": next((r.tokens for r in self.phase_results if r.name == p), None),
                 }
                 for p in self.phases
             ],

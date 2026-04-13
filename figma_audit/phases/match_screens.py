@@ -123,9 +123,7 @@ def _build_routes_description(pages_manifest: dict) -> str:
 
         capturable = page.get("capturable_states", [])
         if capturable:
-            cap_descs = [
-                f"{cs['state_id']}: {cs.get('description', '')}" for cs in capturable
-            ]
+            cap_descs = [f"{cs['state_id']}: {cs.get('description', '')}" for cs in capturable]
             lines.append(f"  Capturable states (in order): {'; '.join(cap_descs)}")
 
         lines.append("")

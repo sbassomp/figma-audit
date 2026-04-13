@@ -63,6 +63,7 @@ class ScriptedClient:
         # Deep-copy messages so subsequent mutations by the loop don't change
         # what we recorded for assertions.
         import copy
+
         snapshot = dict(kwargs)
         snapshot["messages"] = copy.deepcopy(kwargs.get("messages", []))
         self.calls.append(snapshot)
@@ -92,15 +93,19 @@ def ctx(project: Path) -> AgentContext:
 class TestAgentLoopHappyPath:
     def test_immediate_submit(self, ctx: AgentContext) -> None:
         """Agent submits immediately without using any other tool."""
-        client = ScriptedClient([
-            _MockMessage(content=[
-                _MockToolUseBlock(
-                    id="t1",
-                    name="submit_result",
-                    input={"result": {"hello": "world"}},
+        client = ScriptedClient(
+            [
+                _MockMessage(
+                    content=[
+                        _MockToolUseBlock(
+                            id="t1",
+                            name="submit_result",
+                            input={"result": {"hello": "world"}},
+                        ),
+                    ]
                 ),
-            ]),
-        ])
+            ]
+        )
         result = run_agent_loop(
             client=client,  # type: ignore[arg-type]
             system_prompt="be brief",
@@ -114,20 +119,26 @@ class TestAgentLoopHappyPath:
 
     def test_read_then_submit(self, ctx: AgentContext) -> None:
         """Agent reads a file, then submits."""
-        client = ScriptedClient([
-            _MockMessage(content=[
-                _MockToolUseBlock(
-                    id="t1", name="read_file", input={"path": "lib/main.dart"}
+        client = ScriptedClient(
+            [
+                _MockMessage(
+                    content=[
+                        _MockToolUseBlock(
+                            id="t1", name="read_file", input={"path": "lib/main.dart"}
+                        ),
+                    ]
                 ),
-            ]),
-            _MockMessage(content=[
-                _MockToolUseBlock(
-                    id="t2",
-                    name="submit_result",
-                    input={"result": {"main_found": True}},
+                _MockMessage(
+                    content=[
+                        _MockToolUseBlock(
+                            id="t2",
+                            name="submit_result",
+                            input={"result": {"main_found": True}},
+                        ),
+                    ]
                 ),
-            ]),
-        ])
+            ]
+        )
         result = run_agent_loop(
             client=client,  # type: ignore[arg-type]
             system_prompt="find main",
@@ -148,15 +159,25 @@ class TestAgentLoopHappyPath:
 
     def test_multiple_tool_uses_in_one_turn(self, ctx: AgentContext) -> None:
         """If the model emits 2 tool_use blocks in one turn, both run."""
-        client = ScriptedClient([
-            _MockMessage(content=[
-                _MockToolUseBlock(id="t1", name="read_file", input={"path": "lib/main.dart"}),
-                _MockToolUseBlock(id="t2", name="list_files", input={"directory": "lib"}),
-            ]),
-            _MockMessage(content=[
-                _MockToolUseBlock(id="t3", name="submit_result", input={"result": {"ok": 1}}),
-            ]),
-        ])
+        client = ScriptedClient(
+            [
+                _MockMessage(
+                    content=[
+                        _MockToolUseBlock(
+                            id="t1", name="read_file", input={"path": "lib/main.dart"}
+                        ),
+                        _MockToolUseBlock(id="t2", name="list_files", input={"directory": "lib"}),
+                    ]
+                ),
+                _MockMessage(
+                    content=[
+                        _MockToolUseBlock(
+                            id="t3", name="submit_result", input={"result": {"ok": 1}}
+                        ),
+                    ]
+                ),
+            ]
+        )
         result = run_agent_loop(
             client=client,  # type: ignore[arg-type]
             system_prompt="x",
@@ -180,9 +201,11 @@ class TestAgentLoopErrors:
     def test_iteration_cap(self, ctx: AgentContext) -> None:
         """Loop with no submit_result terminates at max_iterations."""
         # Always emit a read_file call, never submit
-        looping_response = _MockMessage(content=[
-            _MockToolUseBlock(id="t", name="read_file", input={"path": "lib/main.dart"}),
-        ])
+        looping_response = _MockMessage(
+            content=[
+                _MockToolUseBlock(id="t", name="read_file", input={"path": "lib/main.dart"}),
+            ]
+        )
         client = ScriptedClient([looping_response] * 50)
         with pytest.raises(AgentLoopError, match="iteration cap"):
             run_agent_loop(
@@ -197,12 +220,14 @@ class TestAgentLoopErrors:
 
     def test_end_turn_without_submit(self, ctx: AgentContext) -> None:
         """End_turn with no tool calls is an error."""
-        client = ScriptedClient([
-            _MockMessage(
-                content=[_MockTextBlock(text="I give up")],
-                stop_reason="end_turn",
-            ),
-        ])
+        client = ScriptedClient(
+            [
+                _MockMessage(
+                    content=[_MockTextBlock(text="I give up")],
+                    stop_reason="end_turn",
+                ),
+            ]
+        )
         with pytest.raises(AgentLoopError, match="without calling submit_result"):
             run_agent_loop(
                 client=client,  # type: ignore[arg-type]
@@ -215,14 +240,22 @@ class TestAgentLoopErrors:
 
     def test_unknown_tool_does_not_crash(self, ctx: AgentContext) -> None:
         """Unknown tool returns an error result; loop continues."""
-        client = ScriptedClient([
-            _MockMessage(content=[
-                _MockToolUseBlock(id="t1", name="nonexistent_tool", input={}),
-            ]),
-            _MockMessage(content=[
-                _MockToolUseBlock(id="t2", name="submit_result", input={"result": {"k": "v"}}),
-            ]),
-        ])
+        client = ScriptedClient(
+            [
+                _MockMessage(
+                    content=[
+                        _MockToolUseBlock(id="t1", name="nonexistent_tool", input={}),
+                    ]
+                ),
+                _MockMessage(
+                    content=[
+                        _MockToolUseBlock(
+                            id="t2", name="submit_result", input={"result": {"k": "v"}}
+                        ),
+                    ]
+                ),
+            ]
+        )
         result = run_agent_loop(
             client=client,  # type: ignore[arg-type]
             system_prompt="x",
@@ -251,15 +284,24 @@ class TestAgentLoopErrors:
             run=_crashing,
         )
 
-        client = ScriptedClient([
-            _MockMessage(content=[
-                _MockToolUseBlock(id="t1", name="crash", input={}),
-            ]),
-            _MockMessage(content=[
-                _MockToolUseBlock(id="t2", name="submit_result", input={"result": {"x": 1}}),
-            ]),
-        ])
+        client = ScriptedClient(
+            [
+                _MockMessage(
+                    content=[
+                        _MockToolUseBlock(id="t1", name="crash", input={}),
+                    ]
+                ),
+                _MockMessage(
+                    content=[
+                        _MockToolUseBlock(
+                            id="t2", name="submit_result", input={"result": {"x": 1}}
+                        ),
+                    ]
+                ),
+            ]
+        )
         from figma_audit.utils.agent_tools import SUBMIT_RESULT
+
         result = run_agent_loop(
             client=client,  # type: ignore[arg-type]
             system_prompt="x",
@@ -275,6 +317,7 @@ class TestAgentLoopErrors:
     def test_requires_submit_result_tool(self, ctx: AgentContext) -> None:
         """Loop refuses to start without a submit_result tool in the list."""
         from figma_audit.utils.agent_tools import READ_FILE
+
         with pytest.raises(ValueError, match="submit_result"):
             run_agent_loop(
                 client=ScriptedClient([]),  # type: ignore[arg-type]

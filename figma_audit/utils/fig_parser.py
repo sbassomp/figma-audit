@@ -124,8 +124,7 @@ class _KiwiDecoder:
 
     def _decode_struct(self, kw: _KiwiReader, typ: dict) -> dict:
         return {
-            f["name"]: self._decode_type(kw, f["type"], f["array"])
-            for f in typ["fields"].values()
+            f["name"]: self._decode_type(kw, f["type"], f["array"]) for f in typ["fields"].values()
         }
 
     def _decode_enum(self, kw: _KiwiReader, typ: dict) -> str:
@@ -277,8 +276,10 @@ def _compute_bbox(
     # Transform the 4 corners through the absolute transform
     corners = [(0, 0), (w, 0), (w, h), (0, h)]
     abs_corners = [
-        (abs_t[0][0] * cx + abs_t[0][1] * cy + abs_t[0][2],
-         abs_t[1][0] * cx + abs_t[1][1] * cy + abs_t[1][2])
+        (
+            abs_t[0][0] * cx + abs_t[0][1] * cy + abs_t[0][2],
+            abs_t[1][0] * cx + abs_t[1][1] * cy + abs_t[1][2],
+        )
         for cx, cy in corners
     ]
 
@@ -546,8 +547,7 @@ def parse_fig_file(fig_path: str | Path) -> dict:
     # Filter out internal-only pages (component pages)
     if "children" in document:
         document["children"] = [
-            page for page in document["children"]
-            if not _is_internal_page(page, children_of, root)
+            page for page in document["children"] if not _is_internal_page(page, children_of, root)
         ]
 
     return {

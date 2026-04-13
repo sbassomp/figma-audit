@@ -34,8 +34,7 @@ console = Console()
 # The agent explores the codebase with tools instead of receiving a
 # 150KB dump, which avoids hallucinated field names and wrong auth guards.
 
-AGENTIC_SYSTEM_PROMPT = (
-    """\
+AGENTIC_SYSTEM_PROMPT = """\
 You are a senior software engineer analyzing a codebase to produce a structured manifest \
 of all pages/screens for a Figma design audit tool.
 
@@ -101,9 +100,7 @@ grep you run adds to the cumulative context. Be STRATEGIC:
 
 ## Output schema (the argument to submit_result)
 
-"""
-    + SYSTEM_PROMPT.split("JSON Schema to follow:\n")[1]  # Reuse the JSON schema from one-shot
-)
+""" + SYSTEM_PROMPT.split("JSON Schema to follow:\n")[1]  # Reuse the JSON schema from one-shot
 
 
 def _build_agentic_seed_message(

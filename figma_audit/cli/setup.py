@@ -41,9 +41,7 @@ def setup() -> None:
     console.print(f"  ANTHROPIC_API_KEY: {api_status}")
     console.print(f"  FIGMA_TOKEN:       {figma_status}")
 
-    if not anthropic_key or click.confirm(
-        "  Update ANTHROPIC_API_KEY?", default=not anthropic_key
-    ):
+    if not anthropic_key or click.confirm("  Update ANTHROPIC_API_KEY?", default=not anthropic_key):
         anthropic_key = click.prompt("  ANTHROPIC_API_KEY", default=anthropic_key)
 
     if not figma_token or click.confirm("  Update FIGMA_TOKEN?", default=not figma_token):
@@ -87,9 +85,7 @@ def setup() -> None:
         if click.confirm("  Install figma-audit as a launchd service?", default=True):
             _install_launchd_service(env_file, db_path)
     else:
-        console.print(
-            "  [dim]No service manager detected. Use 'figma-audit serve'.[/dim]"
-        )
+        console.print("  [dim]No service manager detected. Use 'figma-audit serve'.[/dim]")
 
     # ── Done ──────────────────────────────────────────────────────
     console.print("\n[bold green]Setup complete![/bold green]")

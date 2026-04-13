@@ -44,8 +44,7 @@ def _generate_executive_summary(
         fidelity = comp.get("overall_fidelity", "?")
         n_disc = len(comp.get("discrepancies", []))
         findings.append(
-            f"- {comp['figma_screen']} ({comp['route']}): "
-            f"{fidelity}, {n_disc} discrepancies"
+            f"- {comp['figma_screen']} ({comp['route']}): {fidelity}, {n_disc} discrepancies"
         )
 
     stats = statistics

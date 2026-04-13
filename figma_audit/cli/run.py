@@ -167,9 +167,7 @@ def run(
                 with open(mapping_path) as f:
                     existing = yaml.safe_load(f)
                 if existing and existing.get("verified"):
-                    matched = sum(
-                        1 for m in existing.get("mappings", []) if m.get("route")
-                    )
+                    matched = sum(1 for m in existing.get("mappings", []) if m.get("route"))
                     console.print(
                         f"  [dim]Existing mapping ({matched} matches, verified) "
                         f"— skip (use --from match to force)[/dim]"

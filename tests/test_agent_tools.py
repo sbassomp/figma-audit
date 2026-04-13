@@ -22,6 +22,7 @@ from figma_audit.utils.agent_tools import (
 
 # ─── fixtures ────────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def project(tmp_path: Path) -> Path:
     """A small fake project tree for sandbox tests."""
@@ -50,6 +51,7 @@ def ctx(project: Path) -> AgentContext:
 
 
 # ─── read_file ───────────────────────────────────────────────────────
+
 
 class TestReadFile:
     def test_reads_existing_file(self, ctx: AgentContext) -> None:
@@ -118,6 +120,7 @@ class TestReadFile:
 
 # ─── grep_code ───────────────────────────────────────────────────────
 
+
 class TestGrepCode:
     def test_finds_pattern(self, ctx: AgentContext) -> None:
         result = GREP_CODE.run({"pattern": "AuthRepository"}, ctx)
@@ -132,9 +135,7 @@ class TestGrepCode:
         assert all("node_modules" not in m for m in result["matches"])
 
     def test_glob_filter(self, ctx: AgentContext) -> None:
-        result = GREP_CODE.run(
-            {"pattern": "departure", "file_glob": "**/*.dart"}, ctx
-        )
+        result = GREP_CODE.run({"pattern": "departure", "file_glob": "**/*.dart"}, ctx)
         assert result["match_count"] >= 1
         assert all(m.endswith(".dart") or ".dart:" in m for m in result["matches"])
 
@@ -159,6 +160,7 @@ class TestGrepCode:
 
 
 # ─── list_files ──────────────────────────────────────────────────────
+
 
 class TestListFiles:
     def test_lists_root(self, ctx: AgentContext) -> None:
@@ -195,6 +197,7 @@ class TestListFiles:
 
 # ─── helpers ─────────────────────────────────────────────────────────
 
+
 class TestHelpers:
     def test_redact_sensitive(self) -> None:
         body = {
@@ -229,10 +232,10 @@ class TestHelpers:
     def test_serialize_tools_shape(self) -> None:
         serialized = serialize_tools([READ_FILE, SUBMIT_RESULT])
         assert len(serialized) == 2
-        assert all("name" in t and "description" in t and "input_schema" in t
-                   for t in serialized)
+        assert all("name" in t and "description" in t and "input_schema" in t for t in serialized)
 
     def test_find_tool(self) -> None:
         from figma_audit.utils.agent_tools import READONLY_TOOLS
+
         assert find_tool(READONLY_TOOLS, "read_file") is READ_FILE
         assert find_tool(READONLY_TOOLS, "nonexistent") is None

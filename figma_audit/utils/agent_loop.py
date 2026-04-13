@@ -123,8 +123,7 @@ def run_agent_loop(
         elapsed = time.monotonic() - start
         if elapsed > max_wall_seconds:
             raise AgentLoopError(
-                f"agent loop wall timeout after {elapsed:.0f}s "
-                f"(limit {max_wall_seconds:.0f}s)"
+                f"agent loop wall timeout after {elapsed:.0f}s (limit {max_wall_seconds:.0f}s)"
             )
         # Token budget
         loop_input_so_far = client.usage.input_tokens - start_input_tokens
@@ -222,6 +221,4 @@ def run_agent_loop(
 
         messages.append({"role": "user", "content": tool_results})
 
-    raise AgentLoopError(
-        f"agent loop hit iteration cap ({max_iterations}) without submit_result"
-    )
+    raise AgentLoopError(f"agent loop hit iteration cap ({max_iterations}) without submit_result")

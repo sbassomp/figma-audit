@@ -200,9 +200,7 @@ def _setup_test_data(
                         test_data[td_key] = cid
                         console.print(f"    Item {cid} taken ({td_key})")
                     else:
-                        console.print(
-                            f"    [yellow]Take failed ({resp.status_code})[/yellow]"
-                        )
+                        console.print(f"    [yellow]Take failed ({resp.status_code})[/yellow]")
                 except Exception as e:
                     console.print(f"    [yellow]Take error: {e}[/yellow]")
 

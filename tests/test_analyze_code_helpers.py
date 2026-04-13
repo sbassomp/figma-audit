@@ -59,9 +59,7 @@ class TestDetectFramework:
 
     def test_nextjs_priority_over_react(self, tmp_path: Path) -> None:
         # next has react as a peer dependency — must match nextjs first
-        (tmp_path / "package.json").write_text(
-            '{"dependencies": {"react": "18", "next": "14"}}'
-        )
+        (tmp_path / "package.json").write_text('{"dependencies": {"react": "18", "next": "14"}}')
         assert _detect_framework(tmp_path) == "nextjs"
 
 

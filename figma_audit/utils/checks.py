@@ -21,9 +21,7 @@ def check_playwright_browser() -> bool:
             return True
 
     console.print("[red]Chromium is not installed for Playwright.[/red]")
-    console.print(
-        "Run: [bold]figma-audit setup[/bold] or [bold]playwright install chromium[/bold]"
-    )
+    console.print("Run: [bold]figma-audit setup[/bold] or [bold]playwright install chromium[/bold]")
     return False
 
 

@@ -32,9 +32,7 @@ class TestFigmaManifest:
         manifest = FigmaManifest(
             file_key="abc123",
             file_name="My File",
-            screens=[
-                FigmaScreen(id="1:2", name="Screen 1", page="Page", width=390, height=844)
-            ],
+            screens=[FigmaScreen(id="1:2", name="Screen 1", page="Page", width=390, height=844)],
         )
         data = manifest.model_dump()
         assert data["file_key"] == "abc123"

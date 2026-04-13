@@ -154,10 +154,7 @@ def _build_initial_message(manifest: dict, config: Config) -> str:
         parts.append("")
 
     # List pages with :param routes to show what needs seeding
-    param_pages = [
-        p for p in manifest.get("pages", [])
-        if ":" in (p.get("route") or "")
-    ]
+    param_pages = [p for p in manifest.get("pages", []) if ":" in (p.get("route") or "")]
     if param_pages:
         parts.append("## Pages needing seeded entity IDs")
         for p in param_pages:
@@ -166,9 +163,7 @@ def _build_initial_message(manifest: dict, config: Config) -> str:
                 url = step.get("url", "")
                 if "${" in url:
                     td_ref = url
-            parts.append(
-                f"- {p['id']} route={p['route']} → nav URL: {td_ref or '(direct)'}"
-            )
+            parts.append(f"- {p['id']} route={p['route']} → nav URL: {td_ref or '(direct)'}")
         parts.append("")
 
     parts.append(
@@ -181,9 +176,7 @@ def _build_initial_message(manifest: dict, config: Config) -> str:
     return "\n".join(parts)
 
 
-def _write_test_setup_to_yaml(
-    test_setup: dict, yaml_path: Path, console: Console
-) -> None:
+def _write_test_setup_to_yaml(test_setup: dict, yaml_path: Path, console: Console) -> None:
     """Write the validated test_setup to figma-audit.yaml (preserving other keys)."""
     existing: dict = {}
     if yaml_path.exists():
@@ -210,9 +203,7 @@ def run(config: Config) -> Path:
     output_dir = config.output_dir
     manifest_path = output_dir / "pages_manifest.json"
     if not manifest_path.exists():
-        raise FileNotFoundError(
-            "pages_manifest.json not found. Run Phase 1 (analyze) first."
-        )
+        raise FileNotFoundError("pages_manifest.json not found. Run Phase 1 (analyze) first.")
 
     with open(manifest_path) as f:
         manifest = json.load(f)
@@ -270,9 +261,7 @@ def run(config: Config) -> Path:
 
     # Launch the agentic loop
     console.print("\n[bold]Starting setup-test-data agent...[/bold]")
-    console.print(
-        "[dim]Budget: max 25 iterations, ~$0.40-1.50 expected[/dim]\n"
-    )
+    console.print("[dim]Budget: max 25 iterations, ~$0.40-1.50 expected[/dim]\n")
 
     client = ClaudeClient(api_key=config.anthropic_api_key)
     result = run_agent_loop(
@@ -290,14 +279,15 @@ def run(config: Config) -> Path:
     test_setup_data = result.data
     if not isinstance(test_setup_data, dict):
         console.print(
-            "[red]Agent returned an unexpected result type. "
-            "Expected a test_setup dict.[/red]"
+            "[red]Agent returned an unexpected result type. Expected a test_setup dict.[/red]"
         )
         console.print(f"Got: {test_setup_data}")
         raise SystemExit(1)
 
-    console.print(f"\n[bold]Agent completed in {result.iterations} iterations "
-                  f"({result.elapsed_seconds:.1f}s)[/bold]")
+    console.print(
+        f"\n[bold]Agent completed in {result.iterations} iterations "
+        f"({result.elapsed_seconds:.1f}s)[/bold]"
+    )
     client.print_usage()
 
     # Show the result for user review

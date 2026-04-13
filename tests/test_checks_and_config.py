@@ -43,9 +43,7 @@ class TestLoadEnvFile:
         monkeypatch.delenv("FIGMA_TOKEN", raising=False)
         cfg_dir = tmp_path / ".config" / "figma-audit"
         cfg_dir.mkdir(parents=True)
-        (cfg_dir / "env").write_text(
-            "ANTHROPIC_API_KEY=sk-ant-test\nFIGMA_TOKEN=figd_test\n"
-        )
+        (cfg_dir / "env").write_text("ANTHROPIC_API_KEY=sk-ant-test\nFIGMA_TOKEN=figd_test\n")
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         load_env_file()
         assert os.environ.get("ANTHROPIC_API_KEY") == "sk-ant-test"
@@ -74,10 +72,7 @@ class TestLoadEnvFile:
         cfg_dir = tmp_path / ".config" / "figma-audit"
         cfg_dir.mkdir(parents=True)
         (cfg_dir / "env").write_text(
-            "# This is a comment\n"
-            "\n"
-            "ANTHROPIC_API_KEY=valid-key\n"
-            "# Another comment\n"
+            "# This is a comment\n\nANTHROPIC_API_KEY=valid-key\n# Another comment\n"
         )
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         load_env_file()
@@ -135,9 +130,7 @@ class TestConfigLoad:
 
     def test_cli_overrides_yaml(self, tmp_path: Path) -> None:
         yaml_file = tmp_path / "config.yaml"
-        yaml_file.write_text(
-            "project: ~/dev/from-yaml\nfigma_url: https://from.yaml\n"
-        )
+        yaml_file.write_text("project: ~/dev/from-yaml\nfigma_url: https://from.yaml\n")
         cfg = Config.load(
             config_path=yaml_file,
             project="~/dev/from-cli",
@@ -146,9 +139,7 @@ class TestConfigLoad:
         # figma_url not overridden, kept from yaml
         assert cfg.figma_url == "https://from.yaml"
 
-    def test_env_var_fallback(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_env_var_fallback(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-from-env")
         monkeypatch.setenv("FIGMA_TOKEN", "figd_from_env")
         cfg = Config.load()

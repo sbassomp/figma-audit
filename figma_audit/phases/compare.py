@@ -494,10 +494,7 @@ def run(config: Config) -> Path:
                     sev = d.get("severity", "?")
                     severity_counts[sev] = severity_counts.get(sev, 0) + 1
                 sev_str = ", ".join(f"{v} {k}" for k, v in severity_counts.items())
-                console.print(
-                    f"    {fidelity} -- "
-                    f"{len(discrepancies)} discrepancies ({sev_str})"
-                )
+                console.print(f"    {fidelity} -- {len(discrepancies)} discrepancies ({sev_str})")
 
         except Exception as e:
             console.print(f"    [red]Error: {e}[/red]")

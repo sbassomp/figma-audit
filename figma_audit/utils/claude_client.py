@@ -307,9 +307,7 @@ class ClaudeClient:
                     )
                     time.sleep(RETRY_BACKOFF * attempt)
                     continue
-                raise ClaudeClientError(
-                    f"Claude API error after {MAX_RETRIES} attempts: {e}"
-                )
+                raise ClaudeClientError(f"Claude API error after {MAX_RETRIES} attempts: {e}")
 
         raise ClaudeClientError(f"Max retries ({MAX_RETRIES}) exceeded")
 

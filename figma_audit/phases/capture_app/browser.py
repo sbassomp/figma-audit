@@ -70,9 +70,7 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
         # Strategy 3: Text-based (works for HTML renderer)
         if text and not clicked:
             try:
-                await page.get_by_text(text, exact=False).first.click(
-                    timeout=min(timeout, 3000)
-                )
+                await page.get_by_text(text, exact=False).first.click(timeout=min(timeout, 3000))
                 clicked = True
             except Exception:
                 pass
@@ -119,9 +117,7 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
         placeholder = step.get("placeholder", "")
         if placeholder and not filled:
             try:
-                await page.get_by_placeholder(placeholder).fill(
-                    value, timeout=min(timeout, 3000)
-                )
+                await page.get_by_placeholder(placeholder).fill(value, timeout=min(timeout, 3000))
                 filled = True
             except Exception:
                 pass

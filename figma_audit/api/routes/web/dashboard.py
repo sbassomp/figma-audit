@@ -46,9 +46,7 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
             )
         ).one()
 
-        run_count = session.exec(
-            select(func.count(Run.id)).where(Run.project_id == p.id)
-        ).one()
+        run_count = session.exec(select(func.count(Run.id)).where(Run.project_id == p.id)).one()
 
         total_runs += run_count
         total_critical += critical_count
