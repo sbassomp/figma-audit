@@ -290,6 +290,7 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
                 page_id=c["page_id"],
                 route=c["route"],
                 landed_url=c.get("landed_url"),
+                viewer_role=c.get("viewer_role"),
                 screenshot_path=c.get("screenshot"),
                 styles_available=c.get("styles_available", False),
                 error=c.get("error"),

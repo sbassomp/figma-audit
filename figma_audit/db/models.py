@@ -65,6 +65,11 @@ class Capture(SQLModel, table=True):
     page_id: str
     route: str
     landed_url: str | None = None  # Final URL after navigation (with params resolved)
+    # Which account role was logged into the browser when this page was
+    # captured. Populated by Phase 4 from the test_setup default_viewer
+    # or the page's explicit ``viewer`` override. None for legacy runs and
+    # public/unauthenticated captures.
+    viewer_role: str | None = None
     screenshot_path: str | None = None
     styles_available: bool = False
     error: str | None = None

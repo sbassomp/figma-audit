@@ -23,6 +23,8 @@ from figma_audit.phases.capture_app.api_client import (
     _api_request_with_prefix_fallback,
     _cleanup_test_data,
     _endpoint_variants,
+    _pre_auth_accounts,
+    _run_setup_dag,
     _setup_test_data,
 )
 from figma_audit.phases.capture_app.browser import (
@@ -63,10 +65,12 @@ __all__ = [
     "_extract_computed_styles",
     "_extract_path",
     "_flutter_login",
+    "_pre_auth_accounts",
     "_resolve_now_token",
     "_resolve_payload",
     "_resolve_template",
     "_run_async",
+    "_run_setup_dag",
     "_setup_test_data",
     "_slugify",
 ]

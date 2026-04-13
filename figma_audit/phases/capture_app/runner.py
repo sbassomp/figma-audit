@@ -18,6 +18,8 @@ from rich.console import Console
 from figma_audit.config import Config
 from figma_audit.phases.capture_app.api_client import (
     _cleanup_test_data,
+    _pre_auth_accounts,
+    _run_setup_dag,
     _setup_test_data,
 )
 from figma_audit.phases.capture_app.browser import (
@@ -322,18 +324,59 @@ async def _run_async(config: Config) -> Path:
         test_data["email"] = config.test_credentials.email
         test_data["otp"] = config.test_credentials.otp
 
-    # Populate app with test data via API calls
-    # Priority: config YAML test_setup > manifest test_setup (AI-generated, less reliable)
+    # Populate app with test data via API calls.
+    # Priority: config YAML test_setup > manifest test_setup (AI-generated, less reliable).
     test_setup = config.test_setup or pages_manifest.get("test_setup", {})
+    parsed_setup = config.test_setup_model()
+
     created_item_ids: list[str] = []
     taken_item_id: str | None = None
-    seed_account = config.seed_account.model_dump() if config.seed_account.email else None
-    if test_setup.get("seed_items") and (seed_account or test_data.get("email")) and app_url:
-        created_item_ids, taken_item_id = _setup_test_data(
-            app_url, test_data, test_setup, seed_account=seed_account
+    viewer_role: str | None = None
+
+    # Multi-actor path: the new-shape test_setup explicitly declares accounts
+    # and a DAG of seed steps. Pre-auth every account, run the DAG via API
+    # (without touching the browser), then pick the default_viewer's
+    # credentials so the browser login logs in as that role.
+    use_multi_actor = bool(parsed_setup.steps) or len(parsed_setup.accounts) >= 2
+    if use_multi_actor and parsed_setup.accounts:
+        console.print("\n[bold]Multi-actor test_setup detected[/bold]")
+        console.print(f"  Accounts: {', '.join(parsed_setup.accounts.keys())}")
+        console.print(f"  Steps: {len(parsed_setup.steps)}")
+        console.print(f"  Default viewer: {parsed_setup.default_viewer or '(first)'}")
+
+        # api_prefix_hint is mutated into this dict on the first successful
+        # login and reused across every subsequent login + seed step call.
+        login_dict = dict(test_setup or {})
+        tokens = _pre_auth_accounts(app_url, login_dict, parsed_setup.accounts)
+
+        if tokens and parsed_setup.steps:
+            _run_setup_dag(app_url, parsed_setup, tokens, test_data, login_dict)
+
+        # Select the viewer account whose credentials will drive the browser
+        # login. Preference: declared default_viewer → first logged-in account.
+        viewer_role = (
+            parsed_setup.default_viewer
+            if parsed_setup.default_viewer and parsed_setup.default_viewer in tokens
+            else (next(iter(tokens), None))
         )
-    # Note: _setup_test_data injects IDs directly into test_data
-    # using the test_data_key from each seed_item spec in the manifest
+        if viewer_role and viewer_role in parsed_setup.accounts:
+            viewer_acct = parsed_setup.accounts[viewer_role]
+            if viewer_acct.email:
+                test_data["email"] = viewer_acct.email
+                test_data["otp"] = viewer_acct.otp
+                console.print(
+                    f"  [dim]Browser will log in as '{viewer_role}' ({viewer_acct.email})[/dim]"
+                )
+    else:
+        # Legacy mono-actor path: seed_items + optional take_item. Kept for
+        # backward compatibility with configs that haven't been migrated.
+        seed_account = config.seed_account.model_dump() if config.seed_account.email else None
+        if test_setup.get("seed_items") and (seed_account or test_data.get("email")) and app_url:
+            created_item_ids, taken_item_id = _setup_test_data(
+                app_url, test_data, test_setup, seed_account=seed_account
+            )
+        # Note: _setup_test_data injects IDs directly into test_data
+        # using the test_data_key from each seed_item spec in the manifest
 
     # Purge any placeholder values still lingering in test_data. If seed_items
     # failed (bad payload, auth issue, etc.) the AI-generated placeholder
@@ -383,7 +426,7 @@ async def _run_async(config: Config) -> Path:
         total_pages = len(pages_to_capture)
         cap_idx = 0
 
-        async def _capture_batch(batch: list[dict]) -> None:
+        async def _capture_batch(batch: list[dict], active_viewer: str | None) -> None:
             nonlocal cap_idx
             for page_info in batch:
                 if run_progress:
@@ -392,23 +435,41 @@ async def _run_async(config: Config) -> Path:
                         progress=cap_idx + 1,
                         total=total_pages,
                     )
+                # Per-page viewer override: a page may declare its own viewer
+                # role. When it matches the active browser session we tag the
+                # capture; when it differs we still tag but log a warning so
+                # the user knows the capture may be wrong.
+                page_viewer = page_info.get("viewer") or active_viewer
+                if (
+                    page_info.get("viewer")
+                    and active_viewer
+                    and page_info["viewer"] != active_viewer
+                ):
+                    console.print(
+                        f"    [yellow]Page '{page_info['id']}' wants viewer "
+                        f"'{page_info['viewer']}' but browser is logged in as "
+                        f"'{active_viewer}' — capture may be incorrect[/yellow]"
+                    )
                 try:
                     result, styles = await _capture_route(
                         page, page_info, app_url, test_data, screenshots_dir
                     )
+                    if page_viewer:
+                        result["viewer_role"] = page_viewer
                     all_results.append(result)
                     if styles:
                         all_styles[page_info["id"]] = styles
                 except Exception as e:
                     console.print(f"  [red]Error capturing {page_info['id']}: {e}[/red]")
-                    all_results.append(
-                        {
-                            "page_id": page_info["id"],
-                            "route": page_info["route"],
-                            "screenshot": None,
-                            "error": str(e),
-                        }
-                    )
+                    failure: dict = {
+                        "page_id": page_info["id"],
+                        "route": page_info["route"],
+                        "screenshot": None,
+                        "error": str(e),
+                    }
+                    if page_viewer:
+                        failure["viewer_role"] = page_viewer
+                    all_results.append(failure)
                 cap_idx += 1
 
         # ── Phase A: Capture public pages (before login) ─────────────
@@ -422,7 +483,8 @@ async def _run_async(config: Config) -> Path:
             except Exception as e:
                 console.print(f"  [yellow]Initial load: {e}[/yellow]")
 
-            await _capture_batch(public_pages)
+            # Public pages have no logged-in viewer.
+            await _capture_batch(public_pages, active_viewer=None)
 
         # ── Phase B: Authenticate ─────────────────────────────────────
         auth_email = test_data.get("email") or test_data.get("phone")
@@ -436,7 +498,8 @@ async def _run_async(config: Config) -> Path:
 
             logged_in = await _flutter_login(page, app_url, auth_email, auth_otp)
             if logged_in:
-                console.print("  [green]Authentication successful[/green]")
+                label = f" as '{viewer_role}'" if viewer_role else ""
+                console.print(f"  [green]Authentication successful{label}[/green]")
             else:
                 console.print(
                     "  [yellow]Authentication failed -- continuing without login[/yellow]"
@@ -445,7 +508,7 @@ async def _run_async(config: Config) -> Path:
         # ── Phase C: Capture auth-required pages (after login) ────────
         if auth_pages:
             console.print(f"\n  [bold]Capturing {len(auth_pages)} authenticated page(s)...[/bold]")
-            await _capture_batch(auth_pages)
+            await _capture_batch(auth_pages, active_viewer=viewer_role)
 
         await browser.close()
 

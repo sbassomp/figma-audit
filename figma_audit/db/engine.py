@@ -50,6 +50,7 @@ def init_db(db_path: str | None = None) -> None:
     # already exists, it raises and we swallow the error.
     migrations = [
         ("capture", "landed_url", "VARCHAR"),
+        ("capture", "viewer_role", "VARCHAR"),
     ]
     with engine.begin() as conn:
         for table, column, col_type in migrations:
