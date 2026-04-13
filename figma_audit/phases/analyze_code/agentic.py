@@ -66,36 +66,89 @@ grep you run adds to the cumulative context. Be STRATEGIC:
 3. For auth_required: read the router redirect logic (GoRouter `redirect:`, AuthGuard, \
    route observers). A route is auth_required: true if navigating to it while logged-out \
    redirects elsewhere. When in doubt, prefer true.
-4. For test_setup: this has TWO SEPARATE parts — do NOT mix them up: \
+4. For test_setup: this has THREE PARTS — do NOT mix them up: \
    \
-   (a) AUTH FIELDS (how to log in via API): \
+   (a) AUTH FIELDS (shared across all accounts): \
        - auth_endpoint: the endpoint that VERIFIES credentials and returns a token \
          (e.g. /api/auth/verify-otp). This is NOT the OTP request endpoint. \
-       - auth_otp_request_endpoint: OPTIONAL, the endpoint that SENDS the OTP \
-         (e.g. /api/auth/request-otp). Only include if the auth flow has a separate \
-         step for requesting the code before verifying it. \
-       - auth_payload: the body sent to auth_endpoint. Use ${test_data.X} templates. \
+       - auth_otp_request_endpoint: OPTIONAL, the endpoint that SENDS the OTP. \
+       - auth_payload: the body sent to auth_endpoint. Use `${email}` and `${otp}` \
+         placeholders — they are resolved PER ACCOUNT by the harness at run time. \
        - auth_token_path: dotted path to the bearer token in the response. \
    \
-   (b) SEED ITEMS (entities to create for capturing parameterized routes): \
-       - seed_items is a list of API calls that CREATE test data (e.g. POST /api/items). \
-       - Each seed_item has: endpoint, method, payload, id_path, test_data_key. \
-       - Do NOT put auth/login endpoints in seed_items — those belong in (a). \
-       - seed_items should ONLY contain entity-creation endpoints. \
+   (b) ACCOUNTS + DEFAULT_VIEWER (multi-actor roles, READ CAREFULLY): \
+       A user role is an IDENTITY (who is logged in), NOT a category of a \
+       domain object. Roles answer "WHO is acting", not "WHAT is being acted \
+       upon". \
+       \
+       NEGATIVE EXAMPLES (these are NOT roles, do NOT use them): \
+       - `CourseType`, `VehicleType`, `ProductCategory`, `ListingType`, \
+         `PlanTier`, or any enum that describes the OBJECT being manipulated. \
+       - Status enums (draft, published, archived). \
+       - Two pages that render different variants of the same entity. \
+       \
+       POSITIVE SIGNALS (these identify real roles): \
+       - Auth guards that gate a route by role (`@RoleGuard('driver')`, \
+         `requireRole`, `hasPermission`). \
+       - A `UserType`/`UserRole`/`accountType` enum on the user entity itself. \
+       - JWT claims like `role`, `scopes`, `permissions`. \
+       - Separate signup endpoints per actor (`/api/drivers/signup` vs \
+         `/api/clients/signup`). \
+       - Ownership fields like `createdBy` vs `assignedTo` that refer to \
+         DIFFERENT user types. \
+       \
+       ENDPOINT-CALLER HEURISTIC (most reliable): grep the client code for \
+       every action endpoint (`/take`, `/accept`, `/claim`, `/assign`, `/buy`, \
+       `/approve`, `/reject`, `/fulfill`, etc.) and find which screens call it. \
+       If the creation endpoint and the action endpoint are called from \
+       different sections of the app behind different guards, their callers \
+       are distinct roles. The create-er and the take-er are almost always \
+       distinct actors. \
+       \
+       SANITY CHECK BEFORE SUBMIT_RESULT: every role you declare MUST have at \
+       least one capability the other roles do not. If two candidate roles \
+       share exactly the same endpoints and guards, they are not distinct \
+       roles, they are ONE role with different object categories. Collapse \
+       them. Also verify that the action endpoints (`/take`, `/accept`, etc.) \
+       have a corresponding step in your `steps` list, tagged with the role \
+       that calls them. A two-sided flow with only a `create` step is almost \
+       always incomplete. \
+       \
+       - `accounts`: a map of role name to `{email, otp}`. Leave the values \
+         blank; the user fills them in. Use descriptive domain names \
+         (`driver`/`client`, `seller`/`buyer`, not `user1`/`user2` and NEVER \
+         the values of a `*Type` enum). \
+       - `default_viewer`: the role that VIEWS most pages (the consumer side). \
    \
-   For both: grep for the API client / repository classes to find the exact \
-   request DTOs. Read the DTO source file to get the SERIALIZED field names \
+   (c) STEPS (ordered seed calls, each tagged with `as: <role>`): \
+       - Each step has: name, as, endpoint, method, payload, save, depends_on. \
+       - For a two-actor flow (e.g. seller creates listing, buyer places order), \
+         emit TWO steps. The second step's `depends_on` lists the first step's name. \
+       - Match the `as` role to the action's authorization: if only drivers can \
+         accept a course, the accept step goes `as: driver`. \
+       - `save` extracts IDs from responses; use the saved key in later URLs \
+         via `${key}`. \
+   \
+   For all: grep for the API client / repository classes to find the exact \
+   request DTOs. Read the DTO source to get the SERIALIZED field names \
    (@JsonValue, @JsonProperty, @SerializedName). Use ${now+1d} for future dates. \
-   Use ${test_data.X} for credential templates. NEVER guess field names. \
+   NEVER guess field names. \
    \
    IMPORTANT: include the full API prefix in endpoints (e.g. /api/exchange/courses, \
    not just /exchange/courses). Read the API client's baseUrl/baseOptions to find \
    the prefix.
-5. For navigation_steps: prefer direct URL navigation. Only use click-based steps for \
-   modals without a route. For parameterized routes (/:id), use ${test_data.<key>}.
-6. For design tokens: read the MAIN theme/token file only. Extract colors, fonts, \
+   \
+5. For per-page `viewer` and `depends_on`: if a page is only visible to one role \
+   (detected via route guard, required claim, or business logic), set `viewer` to \
+   that role. Set `depends_on` to the list of step names whose `save` values are \
+   templated into the page route (e.g. a `/items/${item_id}` page depends on the \
+   step that saved `item_id`).
+6. For navigation_steps: prefer direct URL navigation. Only use click-based steps for \
+   modals without a route. For parameterized routes (/:id), use `${<key>}` where \
+   `<key>` is the name saved by a step (listed in `depends_on`).
+7. For design tokens: read the MAIN theme/token file only. Extract colors, fonts, \
    spacing, radii.
-7. When done, call submit_result with the complete manifest JSON. Do not \
+8. When done, call submit_result with the complete manifest JSON. Do not \
    over-explore — completeness matters less than correctness.
 
 ## Output schema (the argument to submit_result)

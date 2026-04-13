@@ -172,14 +172,74 @@ for any route that is NOT explicitly listed as a public route in the router.
 - For test_data: suggest realistic test values for forms \
 (use plausible phone numbers, addresses, and names appropriate for the app's locale).
 - Extract design tokens from the theme/token files into a structured format.
-- For test_setup: analyze the API client/service files to find the EXACT endpoints, \
-HTTP methods, request payloads, and authentication flow used by the app. \
-Include auth_endpoint (the login/verify endpoint), auth_payload (with ${test_data.key} \
-templates for credentials), auth_otp_request_endpoint (if the auth flow has a separate \
-OTP request step), auth_token_path (dotted path to the token in the response), \
-seed_items (API calls to create test data, with exact endpoint paths and payload structure \
-from the code), take_item (to transition an item to a different state), and cleanup_endpoint. \
-CRITICAL: use the real endpoints and payload field names from the API client code — do NOT guess.
+- For **user roles**: this is the part most likely to go wrong, so read \
+these rules carefully. \
+\
+A user role is an IDENTITY (who is logged in), NOT a category of a domain \
+object. Roles identify WHO is acting, not WHAT the acted-upon thing is. \
+\
+**NEGATIVE EXAMPLES (these are NOT roles):** \
+- ``CourseType`` / ``VehicleType`` with values like ambulance, taxi, vsl \
+- ``ProductCategory`` / ``ListingType`` / ``PlanTier`` \
+- Status enums (draft, published, archived) \
+- Any enum that describes the OBJECT being manipulated, not the user \
+\
+**POSITIVE SIGNALS (these identify roles):** \
+- Auth guards or route middleware that gate a route by role \
+  (``@RoleGuard('driver')``, ``requireRole``, ``hasPermission``) \
+- A ``UserType`` / ``UserRole`` / ``accountType`` enum stored ON THE USER \
+  entity itself (not on a business object) \
+- JWT claims like ``role``, ``scopes``, ``permissions`` in the token payload \
+- Separate signup/registration endpoints per actor \
+  (``/api/drivers/signup`` vs ``/api/clients/signup``) \
+- Separate login flows or distinct redirect landing pages per role \
+- Entity ownership fields like ``createdBy`` vs ``assignedTo`` that refer to \
+  DIFFERENT user types \
+\
+**Endpoint-caller heuristic** (the most reliable signal): for each endpoint \
+whose name implies an action (``/take``, ``/accept``, ``/claim``, ``/assign``, \
+``/buy``, ``/order``, ``/approve``, ``/reject``, ``/fulfill``, ``/ship``, \
+``/deliver``), grep the CLIENT code to find which screens call it. If the \
+creation endpoint and the action endpoint are called from screens behind \
+DIFFERENT auth guards or from different navigation sections, their callers \
+are different roles. The create-er and the take-er are almost always \
+distinct actors. \
+\
+**Sanity check before emitting**: every role you declare MUST have at least \
+one capability the OTHER roles do not have. If two candidate roles share \
+exactly the same endpoints and guards, they are not distinct roles, they \
+are one role with different object categories. Collapse them. \
+\
+If you find ONE user role only, emit a single account named ``user``. \
+If you find TWO OR MORE distinct roles, use descriptive domain names \
+(``driver``/``client``, ``seller``/``buyer``, not ``user1``/``user2``, and \
+ABSOLUTELY NOT the values of a ``*Type`` enum).
+- For **test_setup**: analyze the API client/service files to find the EXACT \
+endpoints, HTTP methods, request payloads, and authentication flow used by \
+the app. The new multi-actor shape has: \
+(a) ``auth_endpoint``, ``auth_payload``, ``auth_token_path`` — shared across \
+all accounts (one login flow); use ``${email}`` and ``${otp}`` placeholders \
+resolved per-account by the harness; \
+(b) ``accounts`` — a map of role name → credentials. Emit the ROLES you \
+detected; leave ``email``/``otp`` blank (the user fills them in). \
+(c) ``default_viewer`` — which account loads pages that don't override it; \
+this should usually be the "consumer" role (the one that VIEWS most pages — \
+buyer, taker, end user). \
+(d) ``steps`` — ordered list of seed calls, each tagged with ``as: <role>``. \
+For a two-actor flow where a "create" action is reserved to one role and a \
+"take" action to another, emit TWO steps with the correct ``as`` and a \
+``depends_on`` linking them. \
+(e) ``cleanup_endpoint`` — optional. \
+CRITICAL: use the real endpoints and payload field names from the API client \
+code — do NOT guess.
+- For **per-page viewer**: if a page is only visible to a specific role \
+(detected via the route guard or the page's data dependencies), set the \
+``viewer`` field on that page to the matching role. Otherwise leave it \
+unset and the harness uses ``default_viewer``.
+- For **per-page depends_on**: list the names of any ``steps`` whose \
+``save`` values are templated into the page's route or navigation. For \
+example, a detail page at ``/items/${item_id}`` depends on the step that \
+creates the item.
 
 JSON Schema to follow:
 {
@@ -192,6 +252,8 @@ JSON Schema to follow:
       "name": "string (class/component name)",
       "file": "string (relative file path)",
       "auth_required": "boolean",
+      "viewer": "string (account role, optional; omit to use default_viewer)",
+      "depends_on": ["string (names of steps whose save values this page needs)"],
       "description": "string (what the page does, in English)",
       "params": [{"name": "string", "type": "string", "optional": "boolean"}],
       "required_state": {
@@ -232,25 +294,36 @@ JSON Schema to follow:
     "email": "test@example.com"
   },
   "test_setup": {
-    "description": "API calls to create test data before capture. Optional.",
-    "auth_endpoint": "/api/public/auth/login",
-    "auth_payload": {"email": "${test_data.email}", "code": "${test_data.otp}"},
+    "description": "Multi-actor test setup: accounts + DAG of seed steps.",
+    "auth_endpoint": "/api/auth/login",
+    "auth_otp_request_endpoint": "/api/auth/otp",
+    "auth_payload": {"email": "${email}", "otp": "${otp}"},
     "auth_token_path": "accessToken",
-    "seed_items": [
+    "accounts": {
+      "seller": {"email": "", "otp": "1234"},
+      "buyer": {"email": "", "otp": "1234"}
+    },
+    "default_viewer": "buyer",
+    "steps": [
       {
-        "endpoint": "/api/items",
+        "name": "create_listing",
+        "as": "seller",
+        "endpoint": "/api/listings",
         "method": "POST",
-        "payload": {"name": "Test item", "status": "available"},
-        "id_path": "id",
-        "test_data_key": "item_id"
+        "payload": {"title": "Test listing", "priceCents": 1000},
+        "save": {"listing_id": "id"}
+      },
+      {
+        "name": "place_order",
+        "as": "buyer",
+        "endpoint": "/api/listings/${listing_id}/orders",
+        "method": "POST",
+        "payload": {"quantity": 1},
+        "save": {"order_id": "id"},
+        "depends_on": ["create_listing"]
       }
     ],
-    "take_item": {
-      "endpoint": "/api/items/${item_id}/take",
-      "method": "POST",
-      "test_data_key": "item_taken_id"
-    },
-    "cleanup_endpoint": "/api/items/${item_id}/archive"
+    "cleanup_endpoint": "/api/listings/${listing_id}/archive"
   }
 }
 """
