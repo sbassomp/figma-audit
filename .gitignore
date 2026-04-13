@@ -25,6 +25,7 @@ Thumbs.db
 # Env / secrets
 .env
 .pwd
+.pat_*
 *.db
 
 # Tools config (not project code)
