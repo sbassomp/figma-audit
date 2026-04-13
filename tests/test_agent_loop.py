@@ -13,7 +13,6 @@ from figma_audit.utils.agent_loop import AgentLoopError, run_agent_loop
 from figma_audit.utils.agent_tools import READONLY_TOOLS
 from figma_audit.utils.claude_client import TokenUsage
 
-
 # ─── mock SDK objects ────────────────────────────────────────────────
 
 

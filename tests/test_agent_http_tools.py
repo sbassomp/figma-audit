@@ -16,7 +16,6 @@ import pytest
 from figma_audit.utils.agent_context import AgentContext
 from figma_audit.utils.agent_tools import ASK_USER, HTTP_REQUEST
 
-
 # ─── tiny test server ────────────────────────────────────────────────
 
 

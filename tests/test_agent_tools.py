@@ -20,7 +20,6 @@ from figma_audit.utils.agent_tools import (
     serialize_tools,
 )
 
-
 # ─── fixtures ────────────────────────────────────────────────────────
 
 @pytest.fixture

@@ -1,6 +1,7 @@
 """Tests for htmx endpoints and web UI interactions."""
 
 import os
+import pathlib
 import tempfile
 
 from fastapi.testclient import TestClient
@@ -227,6 +228,3 @@ class TestWebFilters:
         r = client.get(f"/projects/test/runs/{run_id}?status=ignored")
         assert r.status_code == 200
         assert "Couleur differente" not in r.text
-
-
-import pathlib
