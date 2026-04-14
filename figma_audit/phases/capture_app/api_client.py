@@ -13,6 +13,9 @@ match the actual request DTO. This module compensates for both:
 
 from __future__ import annotations
 
+import base64
+import json
+
 from rich.console import Console
 
 from figma_audit.config import Account, TestSetup
@@ -23,6 +26,36 @@ from figma_audit.phases.capture_app.templates import (
 )
 
 console = Console()
+
+
+def _extract_jwt_sub(token: str) -> str | None:
+    """Return the ``sub`` claim of a JWT without verifying its signature.
+
+    Used after ``_api_login`` to expose each authenticated account's
+    stable user identifier (typically the Keycloak user UUID) to
+    template substitution. The resulting value lands in ``test_data``
+    as ``<role>_user_id`` so navigation URLs like ``/profile/:userId``
+    can template ``/profile/${driver_user_id}`` instead of leaving a
+    hallucinated placeholder that leaks into captures.
+
+    Parsing is intentionally minimal and never raises: an invalid or
+    unparsable token just returns ``None`` and the caller continues.
+    """
+    if not token:
+        return None
+    try:
+        parts = token.split(".")
+        if len(parts) < 2:
+            return None
+        payload = parts[1]
+        # Base64url decoding requires padding to a multiple of 4.
+        padded = payload + "=" * (-len(payload) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
+        data = json.loads(raw)
+    except (ValueError, json.JSONDecodeError):
+        return None
+    sub = data.get("sub")
+    return str(sub) if sub else None
 
 
 def _pre_auth_accounts(

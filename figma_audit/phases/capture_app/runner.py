@@ -18,6 +18,7 @@ from rich.console import Console
 from figma_audit.config import Config
 from figma_audit.phases.capture_app.api_client import (
     _cleanup_test_data,
+    _extract_jwt_sub,
     _pre_auth_accounts,
     _run_setup_dag,
     _setup_test_data,
@@ -400,6 +401,16 @@ async def _run_async(config: Config) -> Path:
         # login and reused across every subsequent login + seed step call.
         login_dict = dict(test_setup or {})
         tokens = _pre_auth_accounts(app_url, login_dict, parsed_setup.accounts)
+
+        # Expose each authenticated account's stable user id as
+        # ``<role>_user_id`` in test_data. Routes like /profile/:userId or
+        # /users/:id can then template ``${driver_user_id}`` instead of
+        # leaking a hallucinated placeholder. Runs before the DAG so a
+        # seed step that references the current user works too.
+        for role, token in tokens.items():
+            sub = _extract_jwt_sub(token)
+            if sub:
+                test_data[f"{role}_user_id"] = sub
 
         if tokens and parsed_setup.steps:
             _run_setup_dag(app_url, parsed_setup, tokens, test_data, login_dict)
