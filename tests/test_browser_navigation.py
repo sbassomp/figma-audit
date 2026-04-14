@@ -19,6 +19,7 @@ from figma_audit.phases.capture_app.browser import (
     _has_figma_audit_bridge,
     _has_flutter_semantics,
 )
+from figma_audit.phases.capture_app.templates import NavigationFailedError
 
 
 class _FakePage:
@@ -90,7 +91,9 @@ class TestBridgePush:
             "url": "/courses/319/validate",
             "extra": {"x": 1},
         }
-        with pytest.raises(RuntimeError, match="bridge is not installed"):
+        # Missing bridge is a structural navigation failure: the runner
+        # must abort the capture and refuse to screenshot the wrong page.
+        with pytest.raises(NavigationFailedError, match="bridge is not installed"):
             asyncio.run(_execute_navigation_step(page, step, {}))
 
     def test_unresolved_template_rejected(self) -> None:
@@ -103,6 +106,40 @@ class TestBridgePush:
         }
         with pytest.raises(Exception):  # UnresolvedPlaceholderError subclass
             asyncio.run(_execute_navigation_step(page, step, {}))
+
+
+class TestHardNavigationFailures:
+    """Critical nav steps must raise NavigationFailedError so the runner
+    refuses to take a screenshot of whatever the browser happens to show.
+    """
+
+    def test_wait_for_url_timeout_raises(self):
+        class _P(_FakePage):
+            async def wait_for_url(self_inner, *a, **k):
+                raise TimeoutError("Timeout 5000ms exceeded.")
+
+        page = _P()
+        with pytest.raises(NavigationFailedError, match="wait_for_url"):
+            asyncio.run(
+                _execute_navigation_step(
+                    page,
+                    {"action": "wait_for_url", "pattern": "**/items/*", "timeout": 5000},
+                    {},
+                )
+            )
+
+    def test_navigate_failure_raises(self):
+        class _P(_FakePage):
+            async def goto(self_inner, *a, **k):
+                raise TimeoutError("net::ERR_CONNECTION_REFUSED")
+
+        page = _P()
+        with pytest.raises(NavigationFailedError, match="navigate"):
+            asyncio.run(
+                _execute_navigation_step(
+                    page, {"action": "navigate", "url": "https://app.test/x"}, {}
+                )
+            )
 
 
 class TestHasBridgeDetection:

@@ -14,6 +14,7 @@ from playwright.async_api import Page
 from rich.console import Console
 
 from figma_audit.phases.capture_app.templates import (
+    NavigationFailedError,
     UnresolvedPlaceholderError,
     _assert_url_resolved,
     _resolve_payload,
@@ -81,7 +82,16 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
         _assert_url_resolved(url)
         if url.startswith("/"):
             url = page.url.split("/")[0] + "//" + page.url.split("/")[2] + url
-        await page.goto(url, wait_until="networkidle", timeout=timeout)
+        try:
+            await page.goto(url, wait_until="networkidle", timeout=timeout)
+        except UnresolvedPlaceholderError:
+            raise
+        except Exception as e:
+            # navigate is structurally critical: if we cannot reach the
+            # requested URL there is no point screenshotting whatever the
+            # browser happens to be showing. Convert into a clear nav
+            # failure so the runner aborts the capture.
+            raise NavigationFailedError(f"navigate to {url!r} failed: {e}") from e
 
     elif action == "bridge_push":
         # Route push via the figma-audit Flutter bridge.
@@ -101,7 +111,7 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
             extra = _resolve_payload(extra, test_data)
 
         if not await _has_figma_audit_bridge(page):
-            raise RuntimeError(
+            raise NavigationFailedError(
                 f"bridge_push('{url}') requires window.figmaAudit but the "
                 "bridge is not installed on this app. Integrate "
                 "figma_audit_bridge.dart (see docs/integrations/flutter) "
@@ -109,10 +119,13 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
             )
 
         extra_json = json.dumps(extra, ensure_ascii=False) if extra is not None else "null"
-        await page.evaluate(
-            "([route, extraJson]) => window.figmaAudit.push(route, extraJson)",
-            [url, extra_json],
-        )
+        try:
+            await page.evaluate(
+                "([route, extraJson]) => window.figmaAudit.push(route, extraJson)",
+                [url, extra_json],
+            )
+        except Exception as e:
+            raise NavigationFailedError(f"bridge_push({url!r}) failed: {e}") from e
         # Wait for Flutter to settle after the route change.
         await page.wait_for_timeout(500)
         try:
@@ -266,7 +279,15 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
 
     elif action == "wait_for_url":
         pattern = step.get("pattern", "")
-        await page.wait_for_url(pattern, timeout=timeout)
+        try:
+            await page.wait_for_url(pattern, timeout=timeout)
+        except Exception as e:
+            # Hard fail: a wait_for_url that times out means a previous
+            # step that should have changed the URL did not, so any
+            # screenshot we take now is of the wrong page. Surface it.
+            raise NavigationFailedError(
+                f"wait_for_url({pattern!r}) timed out after {timeout}ms; current url is {page.url}"
+            ) from e
 
     elif action == "screenshot":
         pass  # Handled by the caller

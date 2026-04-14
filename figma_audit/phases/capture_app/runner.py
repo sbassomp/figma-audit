@@ -30,6 +30,7 @@ from figma_audit.phases.capture_app.browser import (
 )
 from figma_audit.phases.capture_app.templates import (
     _PLACEHOLDER_MARKERS,
+    NavigationFailedError,
     UnresolvedPlaceholderError,
     _assert_url_resolved,
     _slugify,
@@ -93,6 +94,7 @@ async def _capture_route(
 
     # Navigate
     placeholder_error: str | None = None
+    nav_failure: str | None = None
     # Prefer a reach_path (scenario-based) when Phase 1 emitted one, because
     # those were derived by tracing the actual call sites in the widget code
     # and are therefore more reliable than a bare URL guess. Fall back to the
@@ -118,7 +120,20 @@ async def _capture_route(
                 placeholder_error = str(e)
                 console.print(f"    [red]{placeholder_error}[/red]")
                 break
+            except NavigationFailedError as e:
+                # A structurally critical step (navigate, bridge_push,
+                # wait_for_url) failed. Whatever the browser is showing
+                # right now is the wrong page, so we must NOT screenshot
+                # it and pretend the capture is OK. Set nav_failure and
+                # short-circuit below.
+                nav_failure = str(e)
+                console.print(f"    [red]Navigation failed: {nav_failure}[/red]")
+                break
             except Exception as e:
+                # Best-effort steps (click, fill, wait) are allowed to fail
+                # without invalidating the capture; their failure typically
+                # cascades into a wait_for_url that does raise hard if the
+                # chain is broken.
                 console.print(f"    [yellow]Nav step failed: {step.get('action')} -- {e}[/yellow]")
     else:
         # Simple direct navigation
@@ -142,6 +157,18 @@ async def _capture_route(
                 "landed_url": page.url,
                 "screenshot": None,
                 "error": f"Unresolved placeholder: {placeholder_error}",
+            },
+            None,
+        )
+
+    if nav_failure:
+        return (
+            {
+                "page_id": page_id,
+                "route": route,
+                "landed_url": page.url,
+                "screenshot": None,
+                "error": f"Navigation failed: {nav_failure}",
             },
             None,
         )

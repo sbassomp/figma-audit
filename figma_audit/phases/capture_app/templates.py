@@ -49,6 +49,28 @@ class UnresolvedPlaceholderError(Exception):
     """
 
 
+class NavigationFailedError(Exception):
+    """Raised by Phase 4 when a navigation step that was expected to land
+    on a specific URL (or whose failure makes the capture meaningless)
+    did not succeed.
+
+    Examples that raise this:
+
+    - ``wait_for_url`` timed out: the previous step was supposed to
+      change the URL to a known pattern and it did not, so we are still
+      on the wrong page.
+    - ``navigate`` could not load the requested URL.
+    - ``bridge_push`` was requested but the figma-audit JS bridge is not
+      installed on the page.
+
+    The runner catches this and marks the capture as a navigation
+    failure, refusing to take a screenshot of the wrong page. Best-effort
+    steps like ``click`` or ``fill`` do not raise this when they cannot
+    find a target — they leave the page where it is and let a downstream
+    ``wait_for_url`` decide whether the chain succeeded.
+    """
+
+
 def _resolve_now_token(expr: str) -> str | None:
     """Resolve a ``now`` / ``now+1d`` / ``now-30m`` token to an ISO-8601 UTC timestamp.
 
