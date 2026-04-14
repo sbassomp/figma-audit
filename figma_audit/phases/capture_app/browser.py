@@ -8,16 +8,56 @@ plus structured input.
 
 from __future__ import annotations
 
+import json
+
 from playwright.async_api import Page
 from rich.console import Console
 
 from figma_audit.phases.capture_app.templates import (
     UnresolvedPlaceholderError,
     _assert_url_resolved,
+    _resolve_payload,
     _resolve_template,
 )
 
 console = Console()
+
+
+async def _has_figma_audit_bridge(page: Page) -> bool:
+    """Return True if the page exposes ``window.figmaAudit`` (bridge installed).
+
+    The bridge is a tiny JS surface the Flutter app registers when audit
+    mode is enabled (see docs/integrations/flutter). Its presence means
+    figma-audit can push routes with GoRouter ``extra`` objects, read the
+    current route, and inject app state, instead of fighting with URL-only
+    navigation.
+    """
+    try:
+        return bool(
+            await page.evaluate(
+                "() => !!(window.figmaAudit && typeof window.figmaAudit.push === 'function')"
+            )
+        )
+    except Exception:
+        return False
+
+
+async def _has_flutter_semantics(page: Page) -> bool:
+    """Return True if Flutter's accessibility tree is enabled on the page.
+
+    When the audited app is a Flutter CanvasKit app, the browser only
+    sees a ``<canvas>`` and accessibility-based selectors (``getByRole``,
+    ``getByLabel``) find nothing. Calling
+    ``SemanticsBinding.instance.ensureSemantics()`` at app startup fixes
+    this by injecting a parallel DOM of ``<flt-semantics>`` nodes that
+    mirror the widget tree. This helper checks for that marker so the
+    runner can warn the user when it is missing.
+    """
+    script = "() => !!document.querySelector('flt-semantics, flt-semantics-host, [flt-semantics]')"
+    try:
+        return bool(await page.evaluate(script))
+    except Exception:
+        return False
 
 
 async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> None:
@@ -42,6 +82,43 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
         if url.startswith("/"):
             url = page.url.split("/")[0] + "//" + page.url.split("/")[2] + url
         await page.goto(url, wait_until="networkidle", timeout=timeout)
+
+    elif action == "bridge_push":
+        # Route push via the figma-audit Flutter bridge.
+        #
+        # Used for pages that are only reachable through GoRouter's ``extra``
+        # parameter (in-memory objects that cannot be serialised into a URL).
+        # The bridge is a small Flutter-side helper the audited app installs
+        # under ``window.figmaAudit`` — see docs/integrations/flutter.
+        # Without it this action is a no-op that logs a clear error so the
+        # user knows to wire the bridge up.
+        url = step.get("url", "")
+        extra = step.get("extra")
+        if "${" in url:
+            url = _resolve_template(url, test_data)
+        _assert_url_resolved(url)
+        if isinstance(extra, dict):
+            extra = _resolve_payload(extra, test_data)
+
+        if not await _has_figma_audit_bridge(page):
+            raise RuntimeError(
+                f"bridge_push('{url}') requires window.figmaAudit but the "
+                "bridge is not installed on this app. Integrate "
+                "figma_audit_bridge.dart (see docs/integrations/flutter) "
+                "or rewrite this step as a UI click sequence."
+            )
+
+        extra_json = json.dumps(extra, ensure_ascii=False) if extra is not None else "null"
+        await page.evaluate(
+            "([route, extraJson]) => window.figmaAudit.push(route, extraJson)",
+            [url, extra_json],
+        )
+        # Wait for Flutter to settle after the route change.
+        await page.wait_for_timeout(500)
+        try:
+            await page.wait_for_load_state("networkidle", timeout=timeout)
+        except Exception:
+            pass
 
     elif action == "click":
         selector = step.get("selector", "")
@@ -84,8 +161,20 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
                 pass
 
         if not clicked:
+            hint = ""
+            if text and not selector and x is None:
+                # Text-only click is the CanvasKit failure mode we see most
+                # often — tell the user exactly what to add so they can
+                # fix it without guessing.
+                if not await _has_flutter_semantics(page):
+                    hint = (
+                        " (no <flt-semantics> found — Flutter accessibility "
+                        "tree is off; add SemanticsBinding.instance.ensureSemantics() "
+                        "in main.dart, see docs/integrations/flutter)"
+                    )
             console.print(
-                f"    [dim]Click failed: selector={selector} text={text} x={x} y={y}[/dim]"
+                f"    [yellow]Click failed: selector={selector} text={text} "
+                f"x={x} y={y}{hint}[/yellow]"
             )
 
     elif action == "fill":
