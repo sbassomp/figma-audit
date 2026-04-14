@@ -37,12 +37,51 @@ from figma_audit.phases.capture_app.templates import (
 console = Console()
 
 
+def _select_reach_path(page_info: dict, *, is_authenticated: bool) -> dict | None:
+    """Return the most appropriate reach_path for the current browser state.
+
+    Reach paths are the scenario-based output of Phase 1's call-site tracing
+    (see docs). Each page may carry a ``reach_paths`` list ordered from most
+    preferred to least. Each path has:
+
+    - ``name`` (identifier, used in logs)
+    - ``required_auth`` — ``"guest"`` / ``"authenticated"`` / ``"any"``
+    - ``steps`` — a list of navigation primitives executed via
+      :func:`_execute_navigation_step`
+    - optional ``description`` — why this path exists, extracted from the
+      widget code that contains the matching ``push`` call site
+
+    Selection rule:
+
+    1. Skip paths whose ``required_auth`` is incompatible with the current
+       browser session (guest path when logged in, or vice versa).
+    2. Among compatible paths, return the first one (the agent lists them
+       in preference order).
+    3. If nothing fits, return ``None`` and let the caller fall back to the
+       legacy ``navigation_steps`` entry.
+    """
+    paths = page_info.get("reach_paths") or []
+    if not paths:
+        return None
+
+    for path in paths:
+        required = (path.get("required_auth") or "any").lower()
+        if required == "guest" and is_authenticated:
+            continue
+        if required == "authenticated" and not is_authenticated:
+            continue
+        return path
+    return None
+
+
 async def _capture_route(
     page: Page,
     page_info: dict,
     app_url: str,
     test_data: dict,
     screenshots_dir: Path,
+    *,
+    is_authenticated: bool = True,
 ) -> tuple[dict, list[dict] | None]:
     """Capture a single route: navigate, screenshot, extract styles."""
     page_id = page_info["id"]
@@ -53,7 +92,20 @@ async def _capture_route(
 
     # Navigate
     placeholder_error: str | None = None
-    nav_steps = page_info.get("navigation_steps", [])
+    # Prefer a reach_path (scenario-based) when Phase 1 emitted one, because
+    # those were derived by tracing the actual call sites in the widget code
+    # and are therefore more reliable than a bare URL guess. Fall back to the
+    # legacy ``navigation_steps`` for pages that predate the reach_path
+    # schema or for which the agent could not synthesise a scenario.
+    selected_path = _select_reach_path(page_info, is_authenticated=is_authenticated)
+    if selected_path is not None:
+        nav_steps = selected_path.get("steps") or []
+        console.print(
+            f"    [dim]reach_path: {selected_path.get('name', '?')} "
+            f"(auth={selected_path.get('required_auth', 'any')})[/dim]"
+        )
+    else:
+        nav_steps = page_info.get("navigation_steps", [])
     if nav_steps:
         for step in nav_steps:
             try:
@@ -426,7 +478,12 @@ async def _run_async(config: Config) -> Path:
         total_pages = len(pages_to_capture)
         cap_idx = 0
 
-        async def _capture_batch(batch: list[dict], active_viewer: str | None) -> None:
+        async def _capture_batch(
+            batch: list[dict],
+            active_viewer: str | None,
+            *,
+            is_authenticated: bool,
+        ) -> None:
             nonlocal cap_idx
             for page_info in batch:
                 if run_progress:
@@ -452,7 +509,12 @@ async def _run_async(config: Config) -> Path:
                     )
                 try:
                     result, styles = await _capture_route(
-                        page, page_info, app_url, test_data, screenshots_dir
+                        page,
+                        page_info,
+                        app_url,
+                        test_data,
+                        screenshots_dir,
+                        is_authenticated=is_authenticated,
                     )
                     if page_viewer:
                         result["viewer_role"] = page_viewer
@@ -484,7 +546,7 @@ async def _run_async(config: Config) -> Path:
                 console.print(f"  [yellow]Initial load: {e}[/yellow]")
 
             # Public pages have no logged-in viewer.
-            await _capture_batch(public_pages, active_viewer=None)
+            await _capture_batch(public_pages, active_viewer=None, is_authenticated=False)
 
         # ── Phase B: Authenticate ─────────────────────────────────────
         auth_email = test_data.get("email") or test_data.get("phone")
@@ -508,7 +570,7 @@ async def _run_async(config: Config) -> Path:
         # ── Phase C: Capture auth-required pages (after login) ────────
         if auth_pages:
             console.print(f"\n  [bold]Capturing {len(auth_pages)} authenticated page(s)...[/bold]")
-            await _capture_batch(auth_pages, active_viewer=viewer_role)
+            await _capture_batch(auth_pages, active_viewer=viewer_role, is_authenticated=True)
 
         await browser.close()
 

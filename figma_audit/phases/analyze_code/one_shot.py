@@ -98,8 +98,48 @@ JSON manifest describing every navigable page in the application.
 Rules:
 - Output ONLY valid JSON, no markdown, no commentary.
 - Temperature 0: be precise and factual, only include what the code explicitly shows.
-- For navigation_steps: describe the Playwright actions needed to reach \
-each page from the app root. \
+- For **reach_paths** (new, preferred for non-trivial routes): a page may be \
+reachable through SEVERAL different user journeys, and the correct capture \
+sequence depends on WHICH journey you want to exercise. Instead of a flat \
+`navigation_steps` list, emit a `reach_paths` array where each entry is one \
+self-contained scenario. Each scenario carries: \
+\
+- `name`: snake_case identifier (e.g. `guest_from_shared_link`, \
+  `authenticated_from_detail_button`) \
+- `description`: one sentence in English explaining where in the code the \
+  journey starts and under what conditions it runs \
+- `required_auth`: `guest` when the journey is only reachable logged-out, \
+  `authenticated` when it requires a session, `any` when it works in both \
+  modes \
+- `steps`: the same primitives as legacy `navigation_steps` (`navigate`, \
+  `click`, `fill`, `wait`, `wait_for_url`, `bridge_push`), executed in order \
+\
+**How to derive reach_paths**: for each parametrised route or each route \
+reachable through a `context.push(...)`, grep the project for call sites \
+that reference it. For every distinct call site, read the surrounding widget \
+code to capture: \
+(a) the conditional branch in which the push lives (`if (!isAuthenticated)`, \
+`if (user.type == X)`, wizard step N, etc.); \
+(b) any `extra:` argument passed along with the route — this signals that \
+the target page reads in-memory state unreachable by URL; \
+(c) the UI action that triggers the push (button label, form submit). \
+Each distinct call site becomes one `reach_path` with steps that reproduce \
+the journey: `navigate` to the parent route, `click` the widget that \
+pushes, `wait_for_url` on the target pattern. \
+\
+**When a page requires an `extra:` Dart object**: emit a `bridge_push` step \
+instead of trying to reach it via URL. The `bridge_push` action calls the \
+figma-audit JS bridge exposed by the audited app (see README, Flutter \
+integration). Format: \
+`{"action": "bridge_push", "url": "/target/${id}/sub", "extra": {"__type__": \
+"Course", "data": {"id": "${course_id}", ...}}}`. \
+\
+Order the `reach_paths` from most preferred to least. The capture runner \
+picks the first one whose `required_auth` fits the current browser session. \
+If a page has only one trivial journey (direct URL navigation), emit the \
+legacy `navigation_steps` and skip `reach_paths`.
+- For legacy **navigation_steps**: describe the Playwright actions needed to \
+reach each page from the app root. \
 **DEFAULT STRATEGY: direct URL navigation.** \
 Modern SPA/Flutter-web apps support deep links on EVERY route — clicking through \
 the UI is slower, brittle, and often fails on Flutter CanvasKit where DOM events \
@@ -260,6 +300,18 @@ JSON Schema to follow:
         "description": "string (what state/data is needed)",
         "data_dependencies": ["string"]
       },
+      "reach_paths": [
+        {
+          "name": "string (snake_case, identifies the scenario)",
+          "description": "string (where in the code this journey starts)",
+          "required_auth": "guest|authenticated|any",
+          "steps": [
+            {"action": "navigate|click|fill|wait|wait_for_url|bridge_push", \
+"url?": "string", "selector?": "string", "text?": "string", "label?": "string", \
+"value?": "string", "pattern?": "string", "extra?": "object", "timeout?": "number"}
+          ]
+        }
+      ],
       "navigation_steps": [
         {"action": "navigate|click|fill|wait|screenshot", "url?": "string", \
 "selector?": "string", "value?": "string", "name?": "string", "timeout?": "number"}

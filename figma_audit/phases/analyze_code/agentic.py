@@ -143,9 +143,45 @@ grep you run adds to the cumulative context. Be STRATEGIC:
    that role. Set `depends_on` to the list of step names whose `save` values are \
    templated into the page route (e.g. a `/items/${item_id}` page depends on the \
    step that saved `item_id`).
-6. For navigation_steps: prefer direct URL navigation. Only use click-based steps for \
-   modals without a route. For parameterized routes (/:id), use `${<key>}` where \
-   `<key>` is the name saved by a step (listed in `depends_on`).
+6. For **reach_paths** (IMPORTANT — this replaces the flat navigation_steps \
+   approach for any non-trivial page): \
+   \
+   A page can have multiple realistic journeys a user takes to land on it. \
+   Instead of guessing one URL, produce a `reach_paths` array per page where \
+   each entry is one scenario (with name, description, required_auth, and \
+   steps). Emit reach_paths whenever a page is reached via \
+   `context.push(...)` with or without an `extra:` argument, or via a click \
+   on another screen. For pure URL-reachable pages with no ambiguity, the \
+   legacy `navigation_steps` is still acceptable. \
+   \
+   HOW TO DERIVE REACH_PATHS: \
+   (1) grep_code for every call site of the target route: \
+       `grep_code('context.push.*<route>', file_glob='**/*.dart')`. \
+       For routes with a go_router path builder also search for the builder \
+       name. \
+   (2) For each distinct call site, read_file the surrounding widget. Note: \
+       the enclosing `if` branch (auth state, user type, course state), \
+       the parent route the user is already on, the visible button label \
+       or action that triggers the push, any `extra:` object passed. \
+   (3) Translate each call site into one reach_path whose steps reproduce \
+       the journey: a `navigate` to the parent route, then the `click` on \
+       the button (with its visible text for Semantics-based matching), \
+       then `wait_for_url` on the target pattern. \
+   (4) If the call site passes `extra: <DartObject>`, the target is NOT \
+       reachable by URL alone. Emit a `bridge_push` step instead: \
+       `{"action": "bridge_push", "url": "/route/${id}", "extra": \
+       {"__type__": "TypeName", "data": {...}}}`. The figma-audit Flutter \
+       bridge decodes this and calls the real GoRouter push. \
+   (5) Order reach_paths from most to least preferred; the runner picks the \
+       first compatible one based on the browser's auth state. \
+   \
+   Set `required_auth` to `guest` when the call site is inside a \
+   `!isAuthenticated` branch, `authenticated` when inside an auth-gated \
+   branch, and `any` otherwise. \
+   \
+   For a purely URL-reachable page (no click-through, no extra), keep the \
+   old `navigation_steps: [{"action": "navigate", "url": ...}]` and omit \
+   `reach_paths`.
 7. For design tokens: read the MAIN theme/token file only. Extract colors, fonts, \
    spacing, radii.
 8. When done, call submit_result with the complete manifest JSON. Do not \
