@@ -230,21 +230,133 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
 
 
 async def _flutter_login(page: Page, app_url: str, email: str, otp: str = "1234") -> bool:
-    """Authenticate on a Flutter CanvasKit app via coordinate-based interaction.
+    """Authenticate on a Flutter web app.
 
-    Flow: ``/signin`` → fill email → click Connexion → ``/login/otp`` → fill
-    OTP → logged in. Returns ``True`` if login succeeded.
+    Dispatches between two strategies:
 
-    Coordinates are scanned because Flutter CanvasKit does not expose a
-    DOM that selectors can target reliably.
+    - **Semantics-first** (preferred): the audited app has enabled the
+      Flutter accessibility tree (see ``docs/integrations/flutter``) so
+      the login form is queryable via Playwright's accessibility APIs.
+      This path is stable against layout shifts because it targets nodes
+      by role and text content rather than hard-coded pixel coordinates.
+    - **Coordinate fallback**: the legacy flow that scans Y positions to
+      find the email input. Only used when Semantics is unavailable.
+      Fragile — any layout tweak on the audited app breaks it.
+
+    Returns ``True`` if the final URL is no longer ``/signin``, ``/login``
+    or ``/otp``, which for a Flutter web app reliably signals a real
+    session has been established.
     """
     try:
-        # Step 1: Navigate to signin
         await page.goto(f"{app_url.rstrip('/')}/signin", wait_until="networkidle", timeout=30000)
-        await page.wait_for_timeout(3000)
+        await page.wait_for_timeout(2500)
+    except Exception as e:
+        console.print(f"    [yellow]Login navigation failed: {e}[/yellow]")
+        return False
 
-        # Step 2: Click on the email field area to trigger Flutter's native input
-        # Scan Y positions to find where the input appears
+    if await _has_flutter_semantics(page):
+        return await _flutter_login_semantics(page, app_url, email, otp)
+    console.print(
+        "    [yellow]Flutter Semantics not detected — falling back to coordinate-based "
+        "login (fragile). Add SemanticsBinding.instance.ensureSemantics() to main.dart, "
+        "see docs/integrations/flutter.[/yellow]"
+    )
+    return await _flutter_login_coords(page, app_url, email, otp)
+
+
+async def _flutter_login_semantics(page: Page, app_url: str, email: str, otp: str = "1234") -> bool:
+    """Semantics-first login path.
+
+    Steps:
+
+    1. Locate the Email text node in the accessibility tree and click
+       slightly below its center. Flutter routes the click to the
+       underlying ``TextField`` and opens its hidden keyboard input.
+    2. Type the email via ``keyboard.type``. Using ``.fill()`` on the
+       DOM input would not trigger Flutter's input events and leave the
+       widget empty.
+    3. Click the Connexion button via ``get_by_role`` (layout-agnostic).
+    4. Wait for navigation to the OTP screen.
+    5. Type the whole OTP string; Flutter distributes the digits across
+       the individual boxes and auto-submits on completion.
+    6. Confirm the URL left ``/signin``, ``/login`` and ``/otp``.
+    """
+    try:
+        # Step 1: click the Email label's semantic node, offset below to
+        # hit the real TextField (the Semantics text node covers only the
+        # label, not the field beneath it).
+        email_target = await page.evaluate(
+            """() => {
+                const nodes = Array.from(document.querySelectorAll('flt-semantics'));
+                for (const n of nodes) {
+                    const t = (n.textContent || '').trim();
+                    if (t.startsWith('Email') || t.toLowerCase().startsWith('e-mail')) {
+                        const r = n.getBoundingClientRect();
+                        return {x: Math.round(r.x + r.width / 2),
+                                y: Math.round(r.y + r.height / 2 + 25)};
+                    }
+                }
+                return null;
+            }"""
+        )
+        if not email_target:
+            console.print("    [yellow]Semantics: no Email label found on /signin[/yellow]")
+            return False
+        await page.mouse.click(email_target["x"], email_target["y"])
+        await page.wait_for_timeout(400)
+
+        # Step 2: type email via keyboard
+        await page.keyboard.type(email, delay=30)
+        await page.wait_for_timeout(500)
+
+        # Step 3: click Connexion button via accessibility role
+        clicked = False
+        for name in ("Connexion", "Se connecter", "Continuer", "Valider", "Suivant"):
+            try:
+                await page.get_by_role("button", name=name).first.click(timeout=3000)
+                clicked = True
+                break
+            except Exception:
+                continue
+        if not clicked:
+            console.print("    [yellow]Semantics: no submit button matched[/yellow]")
+            return False
+
+        # Step 4: wait for transition to /otp or direct landing
+        try:
+            await page.wait_for_url(
+                lambda u: "/signin" not in u or "/otp" in u or "/login" in u,
+                timeout=8000,
+            )
+        except Exception:
+            pass
+        await page.wait_for_timeout(1000)
+
+        # Already logged in? (e.g. saved session or empty OTP flow)
+        if "/signin" not in page.url and "/otp" not in page.url and "/login" not in page.url:
+            return True
+
+        # Step 5: type OTP. Flutter's 6-digit grid auto-focuses the first
+        # field and distributes subsequent digits across the rest.
+        await page.keyboard.type(otp, delay=80)
+        await page.wait_for_timeout(3500)
+
+        # Step 6: verify we're actually logged in now
+        return "/signin" not in page.url and "/otp" not in page.url and "/login" not in page.url
+    except Exception as e:
+        console.print(f"    [yellow]Semantics login error: {e}[/yellow]")
+        return False
+
+
+async def _flutter_login_coords(page: Page, app_url: str, email: str, otp: str = "1234") -> bool:
+    """Legacy coordinate-based login flow.
+
+    Kept as a fallback for apps that have not enabled Flutter Semantics.
+    Fragile: any layout change on the audited app shifts the pixel
+    offsets and breaks the click sequence. Prefer the semantics path.
+    """
+    try:
+        # Click on the email field area to trigger Flutter's native input
         for y in range(350, 600, 25):
             await page.mouse.click(195, y)
             await page.wait_for_timeout(300)
@@ -255,7 +367,7 @@ async def _flutter_login(page: Page, app_url: str, email: str, otp: str = "1234"
             console.print("    [yellow]Could not find email input field[/yellow]")
             return False
 
-        # Step 3: Type the email
+        # Type the email
         inputs = await page.query_selector_all("input")
         if not inputs:
             return False
@@ -263,17 +375,16 @@ async def _flutter_login(page: Page, app_url: str, email: str, otp: str = "1234"
         await page.keyboard.type(email, delay=30)
         await page.wait_for_timeout(500)
 
-        # Step 4: Click Connexion button (below the email field)
+        # Click Connexion button (below the email field)
         await page.mouse.click(195, y + 80)
         await page.wait_for_timeout(5000)
 
-        # Step 5: Check we're on OTP page
+        # Check we're on OTP page
         if "/otp" not in page.url and "/login" not in page.url:
-            # Might already be logged in
             if page.url.rstrip("/").endswith(app_url.rstrip("/")):
                 return True
 
-        # Step 6: Fill OTP digits
+        # Fill OTP digits
         otp_inputs = await page.query_selector_all("input")
         if len(otp_inputs) >= len(otp):
             for i, digit in enumerate(otp):
@@ -286,7 +397,6 @@ async def _flutter_login(page: Page, app_url: str, email: str, otp: str = "1234"
 
         await page.wait_for_timeout(3000)
 
-        # Check if we're logged in (URL should change from /login/otp)
         return "/otp" not in page.url and "/signin" not in page.url
 
     except Exception as e:
