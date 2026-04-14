@@ -130,3 +130,114 @@ class TestHasSemanticsDetection:
     def test_false_when_canvas_only(self) -> None:
         page = _FakePage(evaluate_impl=lambda *a, **k: False)
         assert asyncio.run(_has_flutter_semantics(page)) is False
+
+
+class _FakeLocator:
+    """Stand-in for a Playwright Locator returned by ``get_by_role``.
+
+    Supports ``.all()`` and exposes fake elements that record their clicks.
+    """
+
+    def __init__(self, elements: list[_FakeElement]) -> None:
+        self._elements = elements
+
+    async def all(self):
+        return list(self._elements)
+
+
+class _FakeElement:
+    def __init__(self, box: dict):
+        self._box = box
+        self.clicked = False
+
+    async def bounding_box(self):
+        return self._box
+
+    async def click(self, timeout=None):
+        self.clicked = True
+
+
+class _ClickablePage(_FakePage):
+    """A FakePage that honours get_by_role by returning a controlled locator.
+
+    Tests instantiate it with a map role->list of fake elements, then run
+    the click step and check which fake element got ``clicked = True``.
+    """
+
+    def __init__(self, elements_by_role: dict[str, list[_FakeElement]]):
+        super().__init__(evaluate_impl=lambda *a, **k: True)
+        self._elements_by_role = elements_by_role
+
+    def get_by_role(self, role, name=""):
+        return _FakeLocator(list(self._elements_by_role.get(role, [])))
+
+    def get_by_text(self, *a, **k):
+        class Stub:
+            first = type(
+                "X",
+                (),
+                {"click": staticmethod(lambda *a, **k: asyncio.sleep(0))},
+            )()
+
+        return Stub()
+
+
+class TestClickRoleIndex:
+    """Explicit role + index + min_y filter on the click action.
+
+    These tests patch the locator so we can check which fake element was
+    picked without running a real browser. Asserts on ``clicked``.
+    """
+
+    def test_click_first_button(self):
+        first = _FakeElement(box={"x": 0, "y": 100, "width": 340, "height": 50})
+        second = _FakeElement(box={"x": 0, "y": 200, "width": 340, "height": 50})
+        page = _ClickablePage({"button": [first, second]})
+        asyncio.run(
+            _execute_navigation_step(page, {"action": "click", "role": "button", "index": 0}, {})
+        )
+        assert first.clicked is True
+        assert second.clicked is False
+
+    def test_click_nth_button(self):
+        elements = [
+            _FakeElement(box={"x": 0, "y": 100, "width": 340, "height": 50}),
+            _FakeElement(box={"x": 0, "y": 200, "width": 340, "height": 50}),
+            _FakeElement(box={"x": 0, "y": 300, "width": 340, "height": 50}),
+        ]
+        page = _ClickablePage({"button": elements})
+        asyncio.run(
+            _execute_navigation_step(page, {"action": "click", "role": "button", "index": 2}, {})
+        )
+        assert elements[2].clicked is True
+        assert elements[0].clicked is False
+        assert elements[1].clicked is False
+
+    def test_click_min_y_excludes_app_bar(self):
+        """``min_y: 80`` drops every element whose bounding box is above 80.
+
+        This is how chain navigation picks the first real list tile instead
+        of the back button in the app bar.
+        """
+        app_bar_btn = _FakeElement(box={"x": 0, "y": 20, "width": 40, "height": 40})
+        first_tile = _FakeElement(box={"x": 0, "y": 120, "width": 340, "height": 60})
+        second_tile = _FakeElement(box={"x": 0, "y": 200, "width": 340, "height": 60})
+        page = _ClickablePage({"button": [app_bar_btn, first_tile, second_tile]})
+        asyncio.run(
+            _execute_navigation_step(
+                page,
+                {"action": "click", "role": "button", "index": 0, "min_y": 80},
+                {},
+            )
+        )
+        assert app_bar_btn.clicked is False
+        assert first_tile.clicked is True
+        assert second_tile.clicked is False
+
+    def test_click_index_out_of_range_does_nothing(self):
+        only = _FakeElement(box={"x": 0, "y": 100, "width": 340, "height": 50})
+        page = _ClickablePage({"button": [only]})
+        asyncio.run(
+            _execute_navigation_step(page, {"action": "click", "role": "button", "index": 5}, {})
+        )
+        assert only.clicked is False

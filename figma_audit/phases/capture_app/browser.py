@@ -121,12 +121,22 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
             pass
 
     elif action == "click":
+        # Click resolution order:
+        # 1. CSS selector (traditional DOM apps)
+        # 2. Explicit Semantics role + optional text + optional index/min_y
+        #    (the "click the Nth button below the app bar" pattern used for
+        #    chain navigation like "open invoices list, click the first tile")
+        # 3. Text-based sweep across common interactive roles (legacy)
+        # 4. Plain text match anywhere (HTML renderer)
+        # 5. Coordinate fallback
         selector = step.get("selector", "")
         text = step.get("text", "")
+        role = step.get("role", "")
+        index = int(step.get("index", 0) or 0)
+        min_y = step.get("min_y")
         x, y = step.get("x"), step.get("y")
         clicked = False
 
-        # Strategy 1: CSS selector (works for DOM-based apps)
         if selector and not clicked:
             try:
                 await page.click(selector, timeout=min(timeout, 3000))
@@ -134,17 +144,50 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
             except Exception:
                 pass
 
-        # Strategy 2: Accessibility role (works for Flutter CanvasKit with Semantics)
+        # Explicit Semantics role: the agent (or a manual step) tells us
+        # exactly which role to look for and which match to pick. When no
+        # text is given, this matches every element with that role, in
+        # document order. The ``min_y`` filter rejects hits inside the top
+        # chrome (app bar, status bar) so "first list item" lands on the
+        # first real content tile, not the back button.
+        if role and not clicked:
+            try:
+                locator = page.get_by_role(role, name=text) if text else page.get_by_role(role)
+                candidates = await locator.all()
+                if min_y is not None:
+                    filtered = []
+                    for el in candidates:
+                        try:
+                            box = await el.bounding_box()
+                        except Exception:
+                            continue
+                        if box and box.get("y", 0) >= min_y:
+                            filtered.append(el)
+                    candidates = filtered
+                if len(candidates) > index:
+                    await candidates[index].click(timeout=min(timeout, 3000))
+                    clicked = True
+                elif candidates:
+                    # Fewer matches than the requested index: clearer error
+                    console.print(
+                        f"    [yellow]click role='{role}' index={index} but only "
+                        f"{len(candidates)} match(es) available[/yellow]"
+                    )
+            except Exception as e:
+                console.print(f"    [dim]role click failed: {e}[/dim]")
+
+        # Strategy 3: text-based sweep across common roles (legacy helper
+        # for pages that only know the visible label, no explicit role)
         if text and not clicked:
-            for role in ("button", "link", "tab", "menuitem"):
+            for guess_role in ("button", "link", "tab", "menuitem"):
                 try:
-                    await page.get_by_role(role, name=text).click(timeout=min(timeout, 3000))
+                    await page.get_by_role(guess_role, name=text).click(timeout=min(timeout, 3000))
                     clicked = True
                     break
                 except Exception:
                     pass
 
-        # Strategy 3: Text-based (works for HTML renderer)
+        # Strategy 4: text match anywhere (DOM / HTML renderer fallback)
         if text and not clicked:
             try:
                 await page.get_by_text(text, exact=False).first.click(timeout=min(timeout, 3000))
@@ -152,7 +195,7 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
             except Exception:
                 pass
 
-        # Strategy 4: Coordinate-based (last resort)
+        # Strategy 5: coordinate-based (last resort)
         if x is not None and y is not None and not clicked:
             try:
                 await page.mouse.click(x, y)
@@ -162,19 +205,19 @@ async def _execute_navigation_step(page: Page, step: dict, test_data: dict) -> N
 
         if not clicked:
             hint = ""
-            if text and not selector and x is None:
+            if (text or role) and not selector and x is None:
                 # Text-only click is the CanvasKit failure mode we see most
-                # often — tell the user exactly what to add so they can
+                # often. Tell the user exactly what to add so they can
                 # fix it without guessing.
                 if not await _has_flutter_semantics(page):
                     hint = (
-                        " (no <flt-semantics> found — Flutter accessibility "
+                        " (no <flt-semantics> found; Flutter accessibility "
                         "tree is off; add SemanticsBinding.instance.ensureSemantics() "
                         "in main.dart, see docs/integrations/flutter)"
                     )
             console.print(
-                f"    [yellow]Click failed: selector={selector} text={text} "
-                f"x={x} y={y}{hint}[/yellow]"
+                f"    [yellow]Click failed: selector={selector} role={role} text={text} "
+                f"index={index} x={x} y={y}{hint}[/yellow]"
             )
 
     elif action == "fill":
