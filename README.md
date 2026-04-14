@@ -566,6 +566,67 @@ If after `_setup_test_data` runs, any `test_data` value still contains a marker 
 
 This is by design: **the tool refuses to lie about what it captured**. If you see a placeholder error, fix the matching `seed_items` entry. Do not chase the symptom in the comparison view.
 
+## Integrating with Flutter apps
+
+Flutter Web ships in two flavours. The default CanvasKit renderer draws everything into a `<canvas>` element, so the browser DOM does not contain your widgets. figma-audit can still capture pages reachable by URL, but two categories of pages are invisible to it out of the box:
+
+1. **Pages that need UI interaction** (wizard steps, multi-step forms, detail pages behind an action button). Playwright cannot locate buttons or labels because they are pixels, not DOM elements.
+2. **Pages reached through `context.push(route, extra: object)`** (GoRouter). The `extra` argument is an in-memory Dart object, not serialisable into a URL, so `page.goto(...)` cannot reach them.
+
+figma-audit solves both with two tiny opt-in changes on the app side. See [`docs/integrations/flutter/INTEGRATION.md`](docs/integrations/flutter/INTEGRATION.md) for the full walkthrough. In short:
+
+### 1. Enable Flutter Semantics (one line)
+
+```dart
+// lib/main.dart
+import 'package:flutter/semantics.dart';
+
+void main() {
+  SemanticsBinding.instance.ensureSemantics();
+  runApp(const MyApp());
+}
+```
+
+This injects a parallel `<flt-semantics>` DOM tree that Playwright can query via `getByRole` and `getByLabel`. Zero runtime cost, zero UX change. Unlocks every click-and-fill based capture on CanvasKit.
+
+### 2. Install the figma-audit bridge (≈50 lines)
+
+Copy [`docs/integrations/flutter/figma_audit_bridge.dart`](docs/integrations/flutter/figma_audit_bridge.dart) into your project under `lib/dev/figma_audit_bridge.dart` and install it from `main()`:
+
+```dart
+import 'dev/figma_audit_bridge.dart';
+
+void main() {
+  SemanticsBinding.instance.ensureSemantics();
+
+  FigmaAuditBridge.install(
+    appRouter,
+    extraDecoders: {
+      'Course': (json) => Course.fromJson(json),
+      // One entry per type you pass as `extra`
+    },
+  );
+
+  runApp(const MyApp());
+}
+```
+
+The bridge registers `window.figmaAudit.push(route, extraJson)` on the browser side. figma-audit uses it via the new `bridge_push` navigation step to reach pages like `/courses/:id/validate` with the correct `extra` object deserialised on the fly. Install is guarded to debug/profile builds by default (plus an opt-in `--dart-define=FIGMA_AUDIT_ENABLED=true` flag for audit-only staging builds).
+
+### Verify the integration
+
+Open devtools on any page of your staging build and run:
+
+```js
+window.figmaAudit && window.figmaAudit.ping()
+// expected: "ok"
+
+document.querySelectorAll('flt-semantics, flt-semantics-host').length
+// expected: a positive number after the first frame
+```
+
+Both checks passing means figma-audit can drive the app to full coverage. Runs will log `Click failed: ... (no <flt-semantics> found ...)` when Semantics is missing, so you can detect the regression immediately if someone removes the line.
+
 ## Figma rate limiting
 
 The Figma API enforces strict limits on image exports (~30 req/min, with a cooldown that can reach 48h if exceeded). **This is why `.fig` file and ZIP imports are recommended**: they bypass the API entirely.
