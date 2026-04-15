@@ -1,6 +1,6 @@
 [project]
 name = "figma-audit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Automated design conformity audits: compare your Figma designs against your deployed app and get a detailed discrepancy report."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -1,5 +1,55 @@
 # Changelog
 
+## [0.2.0] - 2026-04-16
+
+Second public release. The headline additions are **multi-actor test setups** (one audit can log in as several accounts and have them interact via API before capture), **stateful captures** (a single page can produce one screenshot per tab/filter/wizard step), and a much tighter **Flutter Web integration** path.
+
+### Multi-actor test setup
+
+- New `test_setup` schema with named `accounts`, `default_viewer`, and an explicit DAG of `steps`. A seller account can create a listing, a buyer can place an order, the browser can then capture the listing from the buyer's perspective — all from one YAML block.
+- Auto-migration of the legacy `seed_items` / `take_item` shape into the new schema so existing configs keep running.
+- `figma-audit setup-test-data` CLI to iterate on the DAG without rerunning the full pipeline.
+- Pre-authenticates every account in parallel and routes each step to the correct token via `AgentContext`.
+- `http_request` tool in agentic mode takes an `as: <role>` argument.
+- Each account's user id is extracted from the JWT `sub` claim and exposed as `${<role>_user_id}`, plus `${user_id}` and `${default_viewer_user_id}` aliases pointing at the default viewer.
+- Phase 1 is taught to distinguish user roles from domain enums so agentic runs do not invent fake roles from `CourseType`-like values.
+- Phase 4 runs the seed DAG before capture and tags every screenshot with the viewer role.
+
+### Stateful captures
+
+- Every page can declare multiple `capturable_states`. Two navigation styles are supported: `query` (preferred, merges params into the current URL for a fresh navigation — ideal for tabs and filters) and `delta_steps` (click/fill primitives from the previous state — for wizards and modals).
+- The `state_id` is threaded end-to-end: Phase 3 matches Figma variants per state, the capture DB records one row per (page, state), and Phase 5 compares the right screenshot against the right Figma variant.
+- Phase 3 runs a cross-batch disambiguation pass so two independently-matched states cannot collapse onto the same id.
+- Click steps can target the Nth semantic element in the content area (`{"index": 0, "min_y": 80}`) to click the first real list tile and skip the app bar.
+
+### Flutter Web integration
+
+- New integration guide: `docs/integrations/flutter/INTEGRATION.md` + README section covering the two opt-in changes required for full coverage.
+- `SemanticsBinding.instance.ensureSemantics()` enables Flutter's accessibility tree so Playwright can drive CanvasKit apps via `getByRole` and `getByLabel`.
+- `figma_audit_bridge.dart` (≈50 lines, copy-paste) exposes `window.figmaAudit.push(route, extraJson)` so figma-audit can reach pages that receive a GoRouter `extra` object. New `bridge_push` navigation step uses it.
+- Semantics-first login replaces the old coordinate-based login flow.
+- Phase 1 prompts learned the `bridge_push` step, the detail-after-list reach pattern, and scenario-based `reach_paths` (one entry per user journey to a given page, the runner picks the one that matches the current auth state).
+- New `docs/integrations/flutter/audits/` folder with four drop-in prompts a coding assistant can run on a Flutter project to reach audit-readiness: `context.go` vs `context.push`, stateful URLs for tabs and filters, wizard steps in URL, and Semantics on custom tappable widgets.
+
+### Reliability and honesty
+
+- New Phase 1 manifest validator catches literal `:id` in navigation URLs, unknown `${X_user_id}` templates, `auth_required=false` pages whose only reach_path requires a session (auto-fixed), and duplicate page / state ids — reported right after analyze instead of several phases later.
+- Phase 4 refuses to screenshot when a critical navigation step fails, so no more silent captures of the wrong page under a valid URL.
+- Unresolved `${...}` placeholders, literal `:param` URLs, and test-style placeholder strings (`placeholder_`, `todo_`, `sample-`, `test-`, `example-`, etc.) are detected and rejected with an actionable error.
+- `_assert_url_resolved` runs before every navigation.
+
+### Web dashboard
+
+- Project page header redesign with clearer hierarchy and styled file inputs.
+- Phase 3 reports per-screen progress for a determinate progress bar.
+
+### Misc
+
+- Replaced the remaining pilot-project vocabulary (`MedCorp`, `MedCourses`, `ambulance`/`taxi`/`vsl`) with generic e-commerce examples in prompts, tests and README.
+- Removed em-dashes from README and prose.
+- New `/examples/` demo app scaffolding (not installed via pip, source-only).
+- Documentation: README grew a full Flutter integration section and an "Make your app audit-ready" subsection pointing to the four audit prompts.
+
 ## [0.1.0] - 2026-04-13
 
 First public release.
