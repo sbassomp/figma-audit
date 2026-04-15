@@ -230,9 +230,7 @@ def _disambiguate_states(
             for cs in capturable:
                 desc_lines.append(f"  - `{cs.get('state_id')}`: {cs.get('description', '')}")
         desc_lines.append("")
-        desc_lines.append(
-            f"## {len(screens_in_batch)} Figma screens currently mapped to this page"
-        )
+        desc_lines.append(f"## {len(screens_in_batch)} Figma screens currently mapped to this page")
         for i, s in enumerate(screens_in_batch, start=1):
             desc_lines.append(f"- Image {i}: **{s['name']}** (id: `{s['id']}`)")
 
@@ -240,9 +238,7 @@ def _disambiguate_states(
             "\n\nAssign a DISTINCT `state_id` to each screen based on what you see in the images."
         )
 
-        console.print(
-            f"  [dim]{page_id}: disambiguating {len(screens_in_batch)} screens...[/dim]"
-        )
+        console.print(f"  [dim]{page_id}: disambiguating {len(screens_in_batch)} screens...[/dim]")
 
         try:
             result = client.analyze_with_images(

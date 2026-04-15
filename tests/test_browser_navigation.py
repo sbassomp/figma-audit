@@ -19,7 +19,11 @@ from figma_audit.phases.capture_app.browser import (
     _has_figma_audit_bridge,
     _has_flutter_semantics,
 )
-from figma_audit.phases.capture_app.templates import NavigationFailedError
+from figma_audit.phases.capture_app.templates import (
+    NavigationFailedError,
+    UnresolvedPlaceholderError,
+    _assert_url_resolved,
+)
 
 
 class _FakePage:
@@ -106,6 +110,40 @@ class TestBridgePush:
         }
         with pytest.raises(Exception):  # UnresolvedPlaceholderError subclass
             asyncio.run(_execute_navigation_step(page, step, {}))
+
+
+class TestRouteParamGuard:
+    """The placeholder guard must catch literal route-parameter syntax
+    (``/courses/:id``, ``/profile/:userId``) which means the agent
+    emitted the route template itself instead of a real value.
+    """
+
+    def test_rejects_literal_route_param(self):
+        with pytest.raises(UnresolvedPlaceholderError, match="literal route parameter"):
+            _assert_url_resolved("https://app.test/courses/:id")
+
+    def test_rejects_literal_route_param_in_middle(self):
+        with pytest.raises(UnresolvedPlaceholderError):
+            _assert_url_resolved("https://app.test/courses/:id/validate")
+
+    def test_rejects_literal_route_param_before_query(self):
+        with pytest.raises(UnresolvedPlaceholderError):
+            _assert_url_resolved("https://app.test/profile/:userId?tab=edit")
+
+    def test_allows_real_id_containing_colon(self):
+        """A real id like '318.x-yZ' may contain a dot but NOT a leading
+        colon, so it must not trip the guard."""
+        # Should not raise
+        _assert_url_resolved("https://app.test/courses/318.d-YCIJc93Vs")
+        _assert_url_resolved("https://app.test/profile/4092a617-6f15-4dfc-9b16-14614669e530")
+
+    def test_allows_port_colon(self):
+        """Host:port colons must not be mistaken for a route param."""
+        _assert_url_resolved("http://localhost:8321/projects")
+
+    def test_rejects_trailing_route_param(self):
+        with pytest.raises(UnresolvedPlaceholderError):
+            _assert_url_resolved("https://app.test/items/:item_id")
 
 
 class TestHardNavigationFailures:

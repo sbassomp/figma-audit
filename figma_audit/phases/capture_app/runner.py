@@ -487,10 +487,33 @@ async def _run_async(config: Config) -> Path:
         # /users/:id can then template ``${driver_user_id}`` instead of
         # leaking a hallucinated placeholder. Runs before the DAG so a
         # seed step that references the current user works too.
+        #
+        # Also expose two always-available aliases pointing at the default
+        # viewer's user id: ``user_id`` (generic) and ``default_viewer_user_id``
+        # (explicit). Phase 1 agents have a tendency to invent plausible
+        # template names by following the concept names from the config
+        # (``default_viewer`` from test_setup, ``user`` as a catch-all).
+        # Populating these aliases turns "agent picked a reasonable name"
+        # into a successful capture instead of an unresolved placeholder.
+        default_role = parsed_setup.default_viewer
+        default_sub: str | None = None
         for role, token in tokens.items():
             sub = _extract_jwt_sub(token)
             if sub:
                 test_data[f"{role}_user_id"] = sub
+                if role == default_role:
+                    default_sub = sub
+        if default_sub is None and tokens:
+            # Fallback: first available user id if default_viewer is
+            # unknown or has no token.
+            for role, token in tokens.items():
+                sub = _extract_jwt_sub(token)
+                if sub:
+                    default_sub = sub
+                    break
+        if default_sub:
+            test_data.setdefault("default_viewer_user_id", default_sub)
+            test_data.setdefault("user_id", default_sub)
 
         if tokens and parsed_setup.steps:
             _run_setup_dag(app_url, parsed_setup, tokens, test_data, login_dict)

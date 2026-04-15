@@ -164,6 +164,9 @@ def _extract_path(obj: dict, dotted_path: str) -> str:
     return str(current)
 
 
+_ROUTE_PARAM_PATTERN = re.compile(r"/:[A-Za-z_][A-Za-z0-9_]*(?:/|$|\?)")
+
+
 def _assert_url_resolved(url: str) -> None:
     """Fail loudly if the URL still carries unresolved markers.
 
@@ -171,6 +174,10 @@ def _assert_url_resolved(url: str) -> None:
 
     - Leftover ``${...}`` template braces (key not found in test_data)
     - Common placeholder tokens (``placeholder_xxx``, ``todo_xxx``, ``<TODO>``, etc.)
+    - Literal route parameter syntax (``/courses/:id``, ``/profile/:userId``)
+      which means the agent emitted the route template itself as a
+      navigation URL instead of templating the real value via
+      ``${course_id}`` or ``${driver_user_id}``.
 
     A matched URL is never navigated to — the caller will mark the capture
     as a navigation failure with a clear error.
@@ -179,6 +186,13 @@ def _assert_url_resolved(url: str) -> None:
         raise UnresolvedPlaceholderError(
             f"URL has unresolved template: {url} "
             "(a ${{...}} key was not found in test_data; check test_setup.seed_items)"
+        )
+    if _ROUTE_PARAM_PATTERN.search(url):
+        raise UnresolvedPlaceholderError(
+            f"URL contains a literal route parameter (e.g. ':id'): {url} "
+            "— the navigation target still has the route template syntax instead "
+            "of a real value. Replace ':param' with ${param_key} so the runner "
+            "can substitute a real id at capture time."
         )
     lower = url.lower()
     for marker in _PLACEHOLDER_MARKERS:
