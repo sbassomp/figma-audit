@@ -300,6 +300,17 @@ For a two-actor flow where a "create" action is reserved to one role and a \
 (e) ``cleanup_endpoint`` — optional. \
 CRITICAL: use the real endpoints and payload field names from the API client \
 code — do NOT guess.
+- For **routes with a user id parameter** (``/profile/:userId``, \
+``/users/:id``, ``/members/:userId``): the harness exposes every \
+authenticated account's stable user id as ``${<role>_user_id}`` in \
+``test_data`` (decoded from the JWT ``sub`` claim after login). Use that \
+template directly in the navigation URL: \
+``{"action": "navigate", "url": "/profile/${driver_user_id}"}`` (replace \
+``driver`` with whichever role you picked for ``default_viewer``, or the \
+role declared as ``viewer`` on the page). NEVER emit a literal placeholder \
+like ``/profile/test-user-id``, ``/profile/sample-user-id``, \
+``/profile/example-id`` or ``/profile/demo-user-id``: those are caught by \
+the placeholder guard and fail the capture.
 - For **per-page viewer**: if a page is only visible to a specific role \
 (detected via the route guard or the page's data dependencies), set the \
 ``viewer`` field on that page to the matching role. Otherwise leave it \

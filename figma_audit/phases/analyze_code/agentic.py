@@ -142,7 +142,17 @@ grep you run adds to the cumulative context. Be STRATEGIC:
    (detected via route guard, required claim, or business logic), set `viewer` to \
    that role. Set `depends_on` to the list of step names whose `save` values are \
    templated into the page route (e.g. a `/items/${item_id}` page depends on the \
-   step that saved `item_id`).
+   step that saved `item_id`). \
+   \
+   For routes with a USER ID parameter (`/profile/:userId`, `/users/:id`, \
+   `/members/:userId`): the harness automatically exposes each authenticated \
+   account's stable user id as `${<role>_user_id}` in test_data (decoded from \
+   the JWT `sub` claim after login). Use that template in the navigation URL: \
+   `{"action": "navigate", "url": "/profile/${driver_user_id}"}` (replace \
+   `driver` with whichever role you use as default_viewer or page viewer). \
+   NEVER emit a literal fake id like `test-user-id`, `sample-user-id`, \
+   `example-id`, or `demo-user-id`: those are caught by the placeholder guard \
+   and fail the capture with a clear error.
 6. For **reach_paths** (IMPORTANT — this replaces the flat navigation_steps \
    approach for any non-trivial page): \
    \

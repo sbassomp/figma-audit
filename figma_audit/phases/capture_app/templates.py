@@ -15,12 +15,13 @@ import re
 # replaced by a real seed/login result and the tool should fail loudly
 # rather than silently navigate to a nonsense route.
 #
-# The "test-..." family covers the most common Phase 1 hallucinations:
-# when the agent knows a route has a `:userId`, `:token`, or `:id` param
-# but cannot find a seed source, it tends to invent values like
-# "test-user-id", "test-token", "test-id", "test-uuid" that look real
-# enough to slip through. Catching them here turns the symptom into a
-# clear capture failure pointing at the missing seed step or click-path.
+# The "test-...", "sample-...", "demo-..." families cover the most common
+# Phase 1 hallucinations: when the agent knows a route has a ``:userId``,
+# ``:token`` or ``:id`` param but cannot find a seed source, it tends to
+# invent values like "test-user-id", "sample-user-id", "demo-token",
+# "example-id" that look real enough to slip through. Catching them here
+# turns the symptom into a clear capture failure pointing at the missing
+# seed step, click-path, or JWT-derived template.
 _PLACEHOLDER_MARKERS = (
     "placeholder",
     "todo_",
@@ -31,6 +32,15 @@ _PLACEHOLDER_MARKERS = (
     "test-user-id",
     "test-id",
     "test-uuid",
+    "sample-user-id",
+    "sample-token",
+    "sample-id",
+    "sample-uuid",
+    "demo-user-id",
+    "demo-token",
+    "demo-id",
+    "example-id",
+    "example-user-id",
 )
 
 # Regex matching the ``now`` magic time token: ``now``, ``now+1d``, ``now-30m``, etc.
