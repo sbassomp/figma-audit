@@ -39,13 +39,28 @@ it matches an authenticated route, not the splash.
 
 IMPORTANT - Multi-state screens:
 - A single Figma screen may correspond to a SPECIFIC STATE of a page \
-(e.g. a screen with a dark theme = visual variant of the same page).
-- If a page has "capturable states" (capturable_states), identify which \
-specific state each Figma screen corresponds to and fill in the state_id \
-field with the exact identifier (e.g. "step_2_addresses"). \
-If the screen corresponds to the initial state (first step), set state_id \
-to the first capturable state. \
-If no capturable state matches, set state_id to null.
+(e.g. dark theme variant, "Courses prises" tab vs "Courses déposées" tab, \
+filtered list vs unfiltered list, wizard step 2 vs wizard step 3).
+- If a page declares `capturable_states` in the manifest, ALWAYS pick \
+the matching `state_id` from that list and fill it in. NEVER leave \
+state_id null when the page has capturable_states declared.
+- If the page has capturable_states but NONE of them obviously match \
+this Figma variant, choose the closest one and explain the mismatch \
+in the notes.
+- **WHENEVER MULTIPLE FIGMA SCREENS MAP TO THE SAME page_id**: each one \
+MUST receive a distinct state_id (or be marked as obsolete by setting \
+the route to null with a note "obsolete variant"). Two Figma screens \
+sharing the same `(page_id, state_id)` would cascade into duplicated \
+comparisons and false MATCHING_ERROR discrepancies. \
+Look at what visually differs between the candidates: which tab is \
+active? Is it dark mode? Are filters applied? Does the screen show \
+data vs an empty state? Use the most descriptive snake_case state_id \
+you can infer from the visible difference.
+- If the page has NO `capturable_states` declared but you see multiple \
+Figma variants for it, invent a sensible state_id (e.g. "default", \
+"taken", "deposited", "with_filters", "dark_mode", "empty", "step_2") \
+and document the choice in `notes`. The next analyze run can then add \
+this state_id to the manifest's capturable_states.
 
 Rules:
 - Match based on visual content, screen name, route description, AND page context \

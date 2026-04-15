@@ -214,9 +214,43 @@ grep you run adds to the cumulative context. Be STRATEGIC:
    For a purely URL-reachable page (no click-through, no extra), keep the \
    old `navigation_steps: [{"action": "navigate", "url": ...}]` and omit \
    `reach_paths`.
-7. For design tokens: read the MAIN theme/token file only. Extract colors, fonts, \
+7. For **capturable_states**: list every distinct visual state that needs a \
+   separate screenshot for the design audit. For each state, declare HOW to \
+   reach it. Two navigation styles are supported: \
+   \
+   **`query` (PREFERRED for tabs/filters)**: a dict of query params merged \
+   into the current URL, fresh navigation. Use this when a tab or filter \
+   is encoded in the URL (typical after a "stateful URLs" refactor of the \
+   app). Format: \
+   `{"state_id": "taken", "description": "Tab 'Courses prises'", "query": {"tab": "taken"}}` \
+   `{"state_id": "patient_ready", "query": {"patient_ready": "1", "hide_taxi": "1"}}` \
+   \
+   **`delta_steps` (FALLBACK for wizards/modals)**: a list of click/fill \
+   primitives applied from the previous state. Use only when the state \
+   cannot be reached by URL: multi-step wizards, modal overlays without \
+   their own route. Format: \
+   `{"state_id": "step_2", "delta_steps": [{"action": "click", "text": "Suivant"}]}` \
+   \
+   The FIRST capturable_state is always the page's default rendering \
+   (what `navigation_steps` lands on), so its query is empty and \
+   delta_steps is empty. Subsequent states declare query OR delta_steps. \
+   \
+   WHEN TO EMIT: \
+   - Page has TabBar/SegmentedButton: one capturable_state per tab. If the \
+     tab is in the URL (look for `currentQueryParams(context)['tab']` in the \
+     code or a similar pattern), use `query`; otherwise use `delta_steps` \
+     clicking the tab label. \
+   - Page has a filter UI that significantly changes content: emit a state \
+     per "interesting" filter combination. Prefer `query` if filters are \
+     URL-encoded. \
+   - Page is a multi-step wizard: emit one state per step with delta_steps. \
+   - Page has a dark/light theme variant: emit a `dark` state with neither \
+     query nor delta_steps (the runner can flip color scheme separately). \
+   \
+   Omit `capturable_states` entirely for pages with truly one visual state.
+8. For design tokens: read the MAIN theme/token file only. Extract colors, fonts, \
    spacing, radii.
-8. When done, call submit_result with the complete manifest JSON. Do not \
+9. When done, call submit_result with the complete manifest JSON. Do not \
    over-explore — completeness matters less than correctness.
 
 ## Output schema (the argument to submit_result)

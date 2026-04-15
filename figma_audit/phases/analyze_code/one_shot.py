@@ -203,23 +203,56 @@ via API, then navigate to separate IDs — NOT UI clicks.
 - For form_fields: list all user-input fields visible on the page.
 - For interactive_states: list distinct visual states \
 (loading, empty, populated, error, wizard steps).
-- For capturable_states: list ONLY the visual states that can be reached \
-sequentially via Playwright browser automation (wizard steps, tab switches). \
-Exclude transient states (loading, error, success). \
-Each state's delta_steps are INCREMENTAL actions from the PREVIOUS state (not cumulative). \
-The first state's delta_steps is empty (page already loaded after navigation_steps). \
-States MUST be ordered in the sequence they can be reached. \
-Omit capturable_states for pages with only one visual state. \
-For wizards: EVERY step must be a capturable_state (not just 2). If a wizard has 5 steps, \
-generate 5 capturable_states. \
-For pages with tabs: each tab is a capturable_state. \
-For registration flows with multiple pages: each page is on a separate route, \
-but generate capturable_states for sub-steps within each page (e.g. form empty vs filled). \
-IMPORTANT for delta_steps actions: the app may use Flutter CanvasKit which has NO DOM elements. \
-Use {"action": "click", "text": "Button Label"} — the automation will try \
-accessibility roles (button, link, tab) first, then text match, then coordinates. \
-For form fields, use {"action": "fill", "label": "Field Label", "value": "..."} \
-which uses accessibility labels. \
+- For **capturable_states**: list every distinct visual state of the page \
+that the report needs to capture as a separate screenshot. For each state, \
+declare HOW to reach it. Two navigation styles are supported and you must \
+pick the more reliable one for the case at hand: \
+\
+**(A) `query` — preferred for tabs, filters, sort options and any state \
+encoded in the URL query string.** The runner merges these query params \
+into the current URL (preserving path params) and does a fresh navigation. \
+Use this when a recent stateful URLs refactor has put the tab/filter into \
+the URL, OR when the app is naturally URL-driven. Format: \
+`{"state_id": "taken", "description": "Tab Courses prises", \
+"query": {"tab": "taken"}}`. \
+For multi-key filter combinations: `{"state_id": "patient_ready", \
+"query": {"patient_ready": "1", "hide_taxi": "1"}}`. \
+\
+**(B) `delta_steps` — fallback for wizards and stateful interactions \
+that cannot be reached by URL alone.** A list of incremental click/fill \
+primitives executed from the PREVIOUS state. Use this for multi-step \
+forms (wizards), for showing/hiding overlays via a button, for any \
+modal that does not have its own route. Format: \
+`{"state_id": "step_2_addresses", "description": "Step 2 of the wizard", \
+"delta_steps": [{"action": "click", "text": "Suivant"}]}`. \
+\
+The FIRST capturable_state is always the page in its default rendering \
+(what `navigation_steps` lands on). Its `query` and `delta_steps` are \
+both empty (the runner reuses the screenshot already taken). Subsequent \
+states declare query OR delta_steps. \
+\
+**When to emit capturable_states**: \
+\
+1. The page has TABS (TabBar, SegmentedButton, NavigationBar branches): \
+   emit one capturable_state per tab, with `query: {"tab": "..."}` if the \
+   tab is URL-encoded, else `delta_steps` clicking the tab label. \
+2. The page has filters that change the displayed list (filter chips, \
+   filter dropdowns, search): emit a capturable_state per "interesting" \
+   filter combination (default, one filter active, another filter active). \
+   Prefer URL-encoded filters via `query`. \
+3. The page is a multi-step WIZARD: every step is a capturable_state \
+   with delta_steps for the click sequence to the next step. \
+4. The page has dark/light theme variants visible in the design: emit a \
+   `dark` state with no query/delta_steps (the runner can flip the \
+   browser color scheme separately). \
+\
+Omit capturable_states only for pages with truly one visual state. \
+\
+For delta_steps actions: the app may use Flutter CanvasKit which has NO \
+DOM elements. Use {"action": "click", "text": "Button Label"} — the \
+automation tries accessibility roles (button, link, tab) first, then \
+text match, then coordinates. For form fields, use {"action": "fill", \
+"label": "Field Label", "value": "..."} which uses accessibility labels. \
 Never rely on CSS selectors for Flutter CanvasKit apps.
 - For auth_required: this is CRITICAL — getting it wrong causes the audit \
 tool to capture the wrong screen (silent redirect to login). Do NOT infer this \
@@ -362,8 +395,9 @@ JSON Schema to follow:
       "interactive_states": ["string"],
       "capturable_states": [
         {
-          "state_id": "string (snake_case, matches an interactive_states entry)",
+          "state_id": "string (snake_case, e.g. 'taken', 'deposited', 'step_2')",
           "description": "string (what is visible in this state, in English)",
+          "query": {"key": "value"},
           "delta_steps": [
             {"action": "navigate|click|fill|wait|wait_for_url", "url?": "string", \
 "selector?": "string", "text?": "string", "value?": "string", "timeout?": "number"}
