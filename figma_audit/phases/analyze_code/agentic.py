@@ -383,6 +383,11 @@ def _run_agentic(config: Config) -> Path:
     if not isinstance(manifest_data, dict):
         raise ValueError(f"Agent returned non-dict result: {type(manifest_data)}")
 
+    from figma_audit.phases.analyze_code.validator import print_issues, validate_manifest
+
+    manifest_data, _issues = validate_manifest(manifest_data)
+    print_issues(_issues, console)
+
     with open(manifest_path, "w") as f:
         json.dump(manifest_data, f, indent=2, ensure_ascii=False)
 

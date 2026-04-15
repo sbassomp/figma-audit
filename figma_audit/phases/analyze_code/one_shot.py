@@ -528,6 +528,11 @@ def _run_one_shot(config: Config) -> Path:
     _pkg._last_client = client
     client.print_usage()
 
+    from figma_audit.phases.analyze_code.validator import print_issues, validate_manifest
+
+    manifest_data, _issues = validate_manifest(manifest_data)
+    print_issues(_issues, console)
+
     with open(manifest_path, "w") as f:
         json.dump(manifest_data, f, indent=2, ensure_ascii=False)
 
