@@ -54,6 +54,12 @@ class Screen(SQLModel, table=True):
     status: str = "current"  # current | obsolete | draft | component
     mapped_route: str | None = None
     mapped_page_id: str | None = None
+    # Identifier of the specific visual state of the mapped page this
+    # Figma screen depicts. ``None`` means the default/first state of the
+    # page. Used for pages where several Figma screens describe distinct
+    # states (tab variants, filter variants, dark mode, wizard steps) so
+    # each one can be compared against the correct app capture.
+    mapped_state_id: str | None = None
     mapping_confidence: float | None = None
     metadata_json: str | None = None  # JSON: elements, background_color, etc.
     created_at: datetime = Field(default_factory=_now)
@@ -82,6 +88,11 @@ class Discrepancy(SQLModel, table=True):
     screen_id: int | None = Field(default=None, foreign_key="screen.id")
     page_id: str
     route: str
+    # Optional state identifier for pages with several capturable states
+    # (tab variants, filter variants, wizard steps). Allows the report
+    # UI to group discrepancies by state and prevents cross-state
+    # confusion when a page has several Figma variants.
+    state_id: str | None = None
     category: str
     severity: str  # critical | important | minor
     description: str

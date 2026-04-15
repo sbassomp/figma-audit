@@ -276,6 +276,7 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
             if screen:
                 screen.mapped_route = m.get("route")
                 screen.mapped_page_id = m.get("page_id")
+                screen.mapped_state_id = m.get("state_id")
                 screen.mapping_confidence = m.get("confidence")
                 session.add(screen)
 
@@ -327,6 +328,7 @@ def _import_results(session: Session, project: Project, run: Run) -> None:
                     screen_id=screen.id if screen else None,
                     page_id=comp["page_id"],
                     route=comp["route"],
+                    state_id=comp.get("state_id"),
                     category=d["category"],
                     severity=d["severity"],
                     description=d["description"],

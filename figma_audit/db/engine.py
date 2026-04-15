@@ -51,6 +51,8 @@ def init_db(db_path: str | None = None) -> None:
     migrations = [
         ("capture", "landed_url", "VARCHAR"),
         ("capture", "viewer_role", "VARCHAR"),
+        ("screen", "mapped_state_id", "VARCHAR"),
+        ("discrepancy", "state_id", "VARCHAR"),
     ]
     with engine.begin() as conn:
         for table, column, col_type in migrations:
