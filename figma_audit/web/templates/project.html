@@ -3,34 +3,64 @@
 
 {% block content %}
 <div class="page-header">
-  <div class="flex justify-between items-center mb-1">
-    <div>
+  <div class="project-head">
+    <div class="project-title">
       <h2>{{ project.name }}</h2>
-      <p class="subtitle">{{ project.app_url or 'No URL configured' }}</p>
+      {% if project.app_url %}
+      <p class="subtitle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <a href="{{ project.app_url }}" target="_blank" rel="noopener">{{ project.app_url }}</a>
+      </p>
+      {% else %}
+      <p class="subtitle">No URL configured</p>
+      {% endif %}
     </div>
-    <form method="POST" action="/projects/{{ project.slug }}/start-run" class="flex gap-1 items-center">
-      <label class="flex items-center gap-half text-sm" style="cursor: pointer;" title="Phase 1 explores the code with tools instead of a single prompt">
-        <input type="checkbox" name="agentic" value="1" id="agentic-cb">
-        Agentic
-      </label>
-      <select name="analyze_model" class="text-sm" style="padding: 0.2rem 0.4rem; border-radius: 4px; background: var(--card-bg); color: var(--text); border: 1px solid var(--border); display: none;" id="model-select" title="Model for agentic Phase 1">
-        <option value="">Sonnet (~$1)</option>
-        <option value="claude-opus-4-6">Opus (~$5)</option>
-      </select>
-      <button type="submit" class="btn btn-primary">Start a run</button>
+    <form method="POST" action="/projects/{{ project.slug }}/start-run" class="run-launcher">
+      <button type="submit" class="btn btn-primary btn-start" title="Run the full 6-phase audit pipeline">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        Start a run
+      </button>
+      <div class="run-options">
+        <label title="Phase 1 explores the code with tools instead of a single prompt">
+          <input type="checkbox" name="agentic" value="1" id="agentic-cb">
+          Agentic
+        </label>
+        <select name="analyze_model" id="model-select" title="Model for agentic Phase 1" style="display: none;">
+          <option value="">Sonnet (~$1)</option>
+          <option value="claude-opus-4-6">Opus (~$5)</option>
+        </select>
+      </div>
       <script>document.getElementById('agentic-cb').addEventListener('change', function() { document.getElementById('model-select').style.display = this.checked ? '' : 'none'; });</script>
     </form>
   </div>
-  <div class="flex gap-1 items-center flex-wrap" style="margin-top: 0.5rem;">
-    <a href="/projects/{{ project.slug }}/screens" class="btn btn-sm">Figma screens</a>
-    <form hx-post="/projects/{{ project.slug }}/upload-fig" hx-target="#upload-area" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="flex gap-half items-center">
-      <input type="file" name="file" accept=".fig" style="max-width: 140px; font-size: 0.75rem;" required>
-      <button type="submit" class="btn btn-sm">Import .fig</button>
-    </form>
-    <form hx-post="/projects/{{ project.slug }}/upload-screens" hx-target="#upload-area" hx-swap="innerHTML" hx-encoding="multipart/form-data" class="flex gap-half items-center">
-      <input type="file" name="file" accept=".zip" style="max-width: 140px; font-size: 0.75rem;" required>
-      <button type="submit" class="btn btn-sm">Import images</button>
-    </form>
+
+  <div class="action-toolbar">
+    <span class="toolbar-label">Figma&nbsp;screens</span>
+    <a href="/projects/{{ project.slug }}/screens" class="btn btn-sm" title="Browse all Figma screens imported for this project">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Browse
+    </a>
+    <span class="toolbar-sep"></span>
+    <label class="btn btn-sm file-btn" title="Import a .fig file exported from Figma Desktop">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Import .fig file
+      <input type="file" name="file" accept=".fig" required
+             hx-post="/projects/{{ project.slug }}/upload-fig"
+             hx-target="#upload-area"
+             hx-swap="innerHTML"
+             hx-encoding="multipart/form-data"
+             hx-trigger="change">
+    </label>
+    <label class="btn btn-sm file-btn" title="Import a ZIP export of Figma screens (PDF or PNG)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Import images ZIP
+      <input type="file" name="file" accept=".zip" required
+             hx-post="/projects/{{ project.slug }}/upload-screens"
+             hx-target="#upload-area"
+             hx-swap="innerHTML"
+             hx-encoding="multipart/form-data"
+             hx-trigger="change">
+    </label>
   </div>
 </div>
 
