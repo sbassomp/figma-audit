@@ -611,7 +611,7 @@ void main() {
 }
 ```
 
-The bridge registers `window.figmaAudit.push(route, extraJson)` on the browser side. figma-audit uses it via the new `bridge_push` navigation step to reach pages like `/courses/:id/validate` with the correct `extra` object deserialised on the fly. Install is guarded to debug/profile builds by default (plus an opt-in `--dart-define=FIGMA_AUDIT_ENABLED=true` flag for audit-only staging builds).
+The bridge registers `window.figmaAudit.push(route, extraJson)` on the browser side. figma-audit uses it via the new `bridge_push` navigation step to reach pages like `/listings/:id/review` with the correct `extra` object deserialised on the fly. Install is guarded to debug/profile builds by default (plus an opt-in `--dart-define=FIGMA_AUDIT_ENABLED=true` flag for audit-only staging builds).
 
 ### Verify the integration
 

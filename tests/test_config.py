@@ -12,7 +12,7 @@ from figma_audit.config import Account, Config, SetupStep, TestSetup
 
 class TestConfigFileKey:
     def test_extract_from_design_url(self):
-        cfg = Config(figma_url="https://www.figma.com/design/6kTFQMSueuk1dSDgiuMur9/MedCorp")
+        cfg = Config(figma_url="https://www.figma.com/design/6kTFQMSueuk1dSDgiuMur9/ExampleApp")
         assert cfg.figma_file_key == "6kTFQMSueuk1dSDgiuMur9"
 
     def test_extract_from_file_url(self):

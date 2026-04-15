@@ -223,7 +223,7 @@ grep you run adds to the cumulative context. Be STRATEGIC:
    is encoded in the URL (typical after a "stateful URLs" refactor of the \
    app). Format: \
    `{"state_id": "taken", "description": "Tab 'Courses prises'", "query": {"tab": "taken"}}` \
-   `{"state_id": "patient_ready", "query": {"patient_ready": "1", "hide_taxi": "1"}}` \
+   `{"state_id": "in_stock_on_sale", "query": {"in_stock": "1", "on_sale": "1"}}` \
    \
    **`delta_steps` (FALLBACK for wizards/modals)**: a list of click/fill \
    primitives applied from the previous state. Use only when the state \

@@ -215,8 +215,8 @@ Use this when a recent stateful URLs refactor has put the tab/filter into \
 the URL, OR when the app is naturally URL-driven. Format: \
 `{"state_id": "taken", "description": "Tab Courses prises", \
 "query": {"tab": "taken"}}`. \
-For multi-key filter combinations: `{"state_id": "patient_ready", \
-"query": {"patient_ready": "1", "hide_taxi": "1"}}`. \
+For multi-key filter combinations: `{"state_id": "in_stock_on_sale", \
+"query": {"in_stock": "1", "on_sale": "1"}}`. \
 \
 **(B) `delta_steps` — fallback for wizards and stateful interactions \
 that cannot be reached by URL alone.** A list of incremental click/fill \
@@ -280,10 +280,10 @@ A user role is an IDENTITY (who is logged in), NOT a category of a domain \
 object. Roles identify WHO is acting, not WHAT the acted-upon thing is. \
 \
 **NEGATIVE EXAMPLES (these are NOT roles):** \
-- ``CourseType`` / ``VehicleType`` with values like ambulance, taxi, vsl \
-- ``ProductCategory`` / ``ListingType`` / ``PlanTier`` \
-- Status enums (draft, published, archived) \
-- Any enum that describes the OBJECT being manipulated, not the user \
+- ``ProductCategory`` / ``ListingType`` / ``PlanTier`` / ``VehicleType`` \
+- Status enums (draft, published, archived, paid, shipped) \
+- Any enum whose values describe the OBJECT being manipulated, not the user \
+  (book/cd/dvd, basic/pro/enterprise, small/medium/large, etc.) \
 \
 **POSITIVE SIGNALS (these identify roles):** \
 - Auth guards or route middleware that gate a route by role \
