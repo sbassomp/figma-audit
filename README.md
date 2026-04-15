@@ -627,6 +627,17 @@ document.querySelectorAll('flt-semantics, flt-semantics-host').length
 
 Both checks passing means figma-audit can drive the app to full coverage. Runs will log `Click failed: ... (no <flt-semantics> found ...)` when Semantics is missing, so you can detect the regression immediately if someone removes the line.
 
+### Make your app audit-ready (optional but strongly recommended)
+
+The two integration changes above are the minimum. A mature Flutter web codebase usually benefits from four additional cleanups that remove the most common causes of flaky captures. They are documented as drop-in prompts you paste into a coding assistant running at your project root — each one produces an audit table, a diff, a conformance test and a documentation update.
+
+1. **[Navigation: `context.go` vs `context.push`](docs/integrations/flutter/audits/01-navigation-go-vs-push.md)** — fix detail pages whose URL does not update, breaking deep linking and URL-based audits.
+2. **[Stateful URLs for tabs and filters](docs/integrations/flutter/audits/02-stateful-urls.md)** — bring tab, filter, search and sort state into query params so a shared link reproduces the exact view.
+3. **[Wizard steps in URL](docs/integrations/flutter/audits/03-wizard-urls.md)** — encode the current step of multi-step forms as `?step=<name>` so reload preserves progress and the audit can capture each step independently.
+4. **[Semantics on custom tappable widgets](docs/integrations/flutter/audits/04-semantics.md)** — ensure every interactive `GestureDetector` / `InkWell` emits an accessibility node so screen readers, e2e tests and figma-audit can locate it.
+
+Run them in order. Each audit installs a conformance test under `test/lint/` so future PRs cannot reintroduce the broken patterns. See [`docs/integrations/flutter/audits/README.md`](docs/integrations/flutter/audits/README.md) for details.
+
 ## Figma rate limiting
 
 The Figma API enforces strict limits on image exports (~30 req/min, with a cooldown that can reach 48h if exceeded). **This is why `.fig` file and ZIP imports are recommended**: they bypass the API entirely.
