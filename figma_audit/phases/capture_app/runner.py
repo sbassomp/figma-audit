@@ -325,6 +325,11 @@ def _dedupe_captures(all_results: list[dict], screenshots_dir: Path) -> tuple[in
 
     # Walk all captures, collecting (result_idx, state_idx_or_None, rel_path,
     # route_len, is_top_level) for every screenshot.
+    #
+    # The first capturable state (index 0) is by convention the base capture
+    # itself (same screenshot path). Skipping it here prevents the dedup from
+    # flagging it as a "duplicate of itself" and setting its screenshot to
+    # None, which would break the compare phase fallback.
     locations: list[tuple[int, int | None, str, int, bool]] = []
     for i, result in enumerate(all_results):
         route = result.get("route") or ""
@@ -333,6 +338,10 @@ def _dedupe_captures(all_results: list[dict], screenshots_dir: Path) -> tuple[in
         if top_path:
             locations.append((i, None, top_path, route_len, True))
         for s_idx, state in enumerate(result.get("states", []) or []):
+            if s_idx == 0:
+                # First state always reuses the base screenshot path; not a
+                # dedup candidate.
+                continue
             sp = state.get("screenshot")
             if sp:
                 # Wizard states get a length penalty so they never beat their

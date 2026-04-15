@@ -89,6 +89,205 @@ JSON Schema:
 """
 
 
+DISAMBIGUATE_SYSTEM_PROMPT = """\
+You are a UI/UX expert. A batched matching pass has assigned the same
+(page_id, state_id) key to several Figma screens of the same app page.
+Your job is to disambiguate them.
+
+You will receive:
+1. A short description of the app page (route, auth, visual states)
+2. N Figma screen images that were all mapped to the same page
+
+Your task: for each screen, assign a DISTINCT ``state_id`` describing
+what visually differentiates it from the others. Use snake_case
+identifiers derived from what you see (NOT from the original filename
+which is often wrong).
+
+Examples of good state_ids:
+
+- For a wizard/multi-step page: ``step_0_overview``, ``step_1_addresses``,
+  ``step_2_schedule``, ``step_3_patient_info`` (use the actual visible
+  content to pick names)
+- For a list page with variants: ``empty``, ``with_items``, ``filtered``,
+  ``dark_mode``, ``sorted_recent``
+- For a detail page with lifecycle states: ``created``, ``in_progress``,
+  ``completed``, ``cancelled_by_depositor``, ``cancelled_by_taker``,
+  ``expired``
+- For tabbed pages: use the TAB label you can read on the screen
+  (``tab_taken``, ``tab_deposited``, ``tab_messages``)
+
+Rules:
+
+- Every screen in the group MUST receive a distinct state_id. Two
+  screens sharing the same state_id is the bug this pass fixes.
+- Be specific. ``default`` and ``variant_1`` are not acceptable; look
+  at the images and name what you SEE.
+- If two images are truly identical (same content, same layout), pick
+  the clearer candidate to keep and mark the other with
+  ``state_id: "duplicate_of_<kept_state_id>"`` so the human can review.
+- If an image does NOT match the described app page at all (wrong
+  match from the batch pass), set ``state_id`` to
+  ``"wrong_match_<guess_of_actual_page>"`` and set a low confidence so
+  it can be flagged for human review.
+- Output ONLY valid JSON, no markdown.
+
+JSON schema:
+{
+  "mappings": [
+    {
+      "figma_screen_id": "123:456",
+      "state_id": "step_2_addresses",
+      "confidence": 0.92,
+      "notes": "Shows the 'Adresses' step with departure and destination fields visible"
+    }
+  ]
+}
+"""
+
+
+def _disambiguate_states(
+    all_mappings: list[dict],
+    *,
+    screens_by_id: dict[str, dict],
+    output_dir: Path,
+    pages_manifest: dict,
+    client: ClaudeClient,
+) -> None:
+    """Re-disambiguate colliding ``(page_id, state_id)`` groups in place.
+
+    Walks ``all_mappings``, finds every ``page_id`` that has several
+    mappings, and within each page detects groups that collide on
+    ``state_id``. For each colliding group, makes a single vision call
+    with every screen image in the group plus the page description so
+    the model can assign fresh, distinct state_ids.
+
+    Mutates ``all_mappings`` in place: on success the ``state_id``,
+    ``confidence`` and ``notes`` fields of the affected entries are
+    overwritten. The ``route`` and ``page_id`` fields are preserved.
+    """
+    # Group by page_id
+    by_page: dict[str, list[dict]] = {}
+    for m in all_mappings:
+        page_id = m.get("page_id")
+        if not page_id or not m.get("route"):
+            continue
+        by_page.setdefault(page_id, []).append(m)
+
+    # Find groups with collisions
+    colliding_groups: list[tuple[str, list[dict]]] = []
+    for page_id, mappings in by_page.items():
+        if len(mappings) < 2:
+            continue
+        state_counts: dict[str | None, int] = {}
+        for m in mappings:
+            sid = m.get("state_id")
+            state_counts[sid] = state_counts.get(sid, 0) + 1
+        if any(count >= 2 for count in state_counts.values()):
+            colliding_groups.append((page_id, mappings))
+
+    if not colliding_groups:
+        return
+
+    console.print(
+        f"\n[bold]Phase 3 disambiguation: {len(colliding_groups)} page(s) "
+        f"with colliding state_ids[/bold]"
+    )
+
+    pages_by_id = {p["id"]: p for p in pages_manifest.get("pages", [])}
+
+    for page_id, mappings in colliding_groups:
+        # Build the image list for this page
+        image_paths: list[Path] = []
+        screens_in_batch: list[dict] = []
+        for m in mappings:
+            fid = m.get("figma_screen_id")
+            screen = screens_by_id.get(fid) if fid else None
+            if not screen:
+                continue
+            img_rel = screen.get("image_path")
+            if not img_rel:
+                continue
+            abs_img = output_dir / img_rel
+            if not abs_img.exists():
+                continue
+            image_paths.append(abs_img)
+            screens_in_batch.append(screen)
+
+        if len(image_paths) < 2:
+            continue
+
+        # Build the page description
+        page_info = pages_by_id.get(page_id) or {}
+        desc_lines = [
+            f"## App page to disambiguate: `{page_id}`",
+            f"Route: **{page_info.get('route', 'unknown')}**",
+            f"Auth: {'required' if page_info.get('auth_required') else 'public'}",
+            f"Description: {page_info.get('description', '')}",
+        ]
+        capturable = page_info.get("capturable_states") or []
+        if capturable:
+            desc_lines.append("Known capturable states (pick matching identifiers when obvious):")
+            for cs in capturable:
+                desc_lines.append(f"  - `{cs.get('state_id')}`: {cs.get('description', '')}")
+        desc_lines.append("")
+        desc_lines.append(
+            f"## {len(screens_in_batch)} Figma screens currently mapped to this page"
+        )
+        for i, s in enumerate(screens_in_batch, start=1):
+            desc_lines.append(f"- Image {i}: **{s['name']}** (id: `{s['id']}`)")
+
+        user_prompt = "\n".join(desc_lines) + (
+            "\n\nAssign a DISTINCT `state_id` to each screen based on what you see in the images."
+        )
+
+        console.print(
+            f"  [dim]{page_id}: disambiguating {len(screens_in_batch)} screens...[/dim]"
+        )
+
+        try:
+            result = client.analyze_with_images(
+                system_prompt=DISAMBIGUATE_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                images=image_paths,
+                max_tokens=4096,
+                phase="match",
+            )
+        except Exception as e:
+            console.print(f"    [yellow]disambiguation failed for {page_id}: {e}[/yellow]")
+            continue
+
+        # Apply the new state_ids. Match by figma_screen_id.
+        by_fid = {m.get("figma_screen_id"): m for m in mappings}
+        for new in result.get("mappings", []):
+            fid = new.get("figma_screen_id")
+            existing = by_fid.get(fid)
+            if not existing:
+                continue
+            new_state = new.get("state_id")
+            if not new_state:
+                continue
+            existing["state_id"] = new_state
+            if new.get("confidence") is not None:
+                existing["confidence"] = new["confidence"]
+            if new.get("notes"):
+                prev_notes = existing.get("notes", "")
+                existing["notes"] = f"{prev_notes} | disambiguated: {new['notes']}".strip(" |")
+
+        # Sanity: count collisions remaining
+        remaining = {}
+        for m in mappings:
+            sid = m.get("state_id")
+            remaining[sid] = remaining.get(sid, 0) + 1
+        still_colliding = sum(1 for c in remaining.values() if c >= 2)
+        if still_colliding:
+            console.print(
+                f"    [yellow]{page_id}: {still_colliding} state_id(s) still colliding "
+                "after disambiguation[/yellow]"
+            )
+        else:
+            console.print(f"    [green]{page_id}: {len(remaining)} distinct state_ids[/green]")
+
+
 def _build_routes_description(pages_manifest: dict) -> str:
     """Build a rich text description of all routes from the pages manifest."""
     lines = ["## Application Routes\n"]
@@ -327,6 +526,23 @@ def run(config: Config) -> Path:
                 progress=processed_screens,
                 total=n_total_screens,
             )
+
+    # ── Post-pass: cross-batch state disambiguation ──────────────
+    # Each vision batch processes its subset independently and cannot see
+    # what other batches assigned. When several Figma screens end up
+    # mapped to the same (page_id, state_id), compare in Phase 5
+    # collapses them all against the single app capture and produces
+    # cascading MATCHING_ERROR discrepancies. This pass detects those
+    # collisions and asks the model to re-disambiguate the group in a
+    # single dedicated vision call, where it CAN see every candidate at
+    # once.
+    _disambiguate_states(
+        all_mappings,
+        screens_by_id={s["id"]: s for s in screens},
+        output_dir=output_dir,
+        pages_manifest=pages_manifest,
+        client=client,
+    )
 
     _last_client = client
     client.print_usage()
