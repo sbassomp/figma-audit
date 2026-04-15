@@ -33,6 +33,7 @@ from figma_audit.phases.capture_app.templates import (
     NavigationFailedError,
     UnresolvedPlaceholderError,
     _assert_url_resolved,
+    _resolve_template,
     _slugify,
 )
 
@@ -203,12 +204,23 @@ async def _capture_route(
         "styles_available": styles is not None,
     }
 
-    # Capture additional states (wizard steps, tabs) if defined
+    # Capture additional states (wizard steps, tabs, filters) if defined.
+    #
+    # A capturable_state entry supports two navigation styles:
+    #
+    # - ``delta_steps``: list of click/fill/wait primitives applied from
+    #   the CURRENT page to reach the state. Wizard-friendly, order matters.
+    # - ``query``: dict of query parameters to merge into the CURRENT URL
+    #   (preserving path params, path segments and auth state). Tab and
+    #   filter friendly: a fresh navigation lands on the requested state
+    #   without having to simulate clicks through the UI.
+    #
+    # The first state is always the one already captured by the code
+    # above, so it reuses the existing screenshot without re-navigating.
     capturable_states = page_info.get("capturable_states", [])
     if capturable_states:
         state_screenshots = []
 
-        # First capturable state = the screenshot we already took
         first = capturable_states[0]
         state_screenshots.append(
             {
@@ -217,10 +229,10 @@ async def _capture_route(
             }
         )
 
-        # Subsequent states: execute delta_steps → screenshot
         for state_idx, state in enumerate(capturable_states[1:], start=2):
             state_id = state["state_id"]
-            delta_steps = state.get("delta_steps", [])
+            delta_steps = state.get("delta_steps") or []
+            query = state.get("query") or {}
             state_slug = f"{slug}--{_slugify(state_id)}"
             state_screenshot_rel = f"app_screenshots/{state_slug}.png"
             state_screenshot_path = screenshots_dir / f"{state_slug}.png"
@@ -228,8 +240,30 @@ async def _capture_route(
             console.print(f"    State {state_idx}/{len(capturable_states)}: {state_id}...")
 
             try:
-                for step in delta_steps:
-                    await _execute_navigation_step(page, step, test_data)
+                if query:
+                    # Merge query params into the current URL, preserving
+                    # path (including substituted route params) and host.
+                    from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+                    parsed = urlparse(page.url)
+                    merged_qs = dict(parse_qsl(parsed.query, keep_blank_values=False))
+                    for k, v in query.items():
+                        val = str(v)
+                        if "${" in val:
+                            val = _resolve_template(val, test_data)
+                        if val == "" or val is None:
+                            merged_qs.pop(k, None)
+                        else:
+                            merged_qs[k] = val
+                    new_url = urlunparse(parsed._replace(query=urlencode(merged_qs, doseq=False)))
+                    _assert_url_resolved(new_url)
+                    await page.goto(new_url, wait_until="networkidle", timeout=15000)
+                elif delta_steps:
+                    for step in delta_steps:
+                        await _execute_navigation_step(page, step, test_data)
+                # If neither: we stay on the current page and screenshot again
+                # (useful for dark-mode variants triggered by page.emulateMedia
+                # which is set at context level, but also as an escape hatch).
                 await page.wait_for_timeout(1000)
                 await page.screenshot(path=str(state_screenshot_path), full_page=False)
                 state_screenshots.append(
@@ -237,6 +271,16 @@ async def _capture_route(
                         "state_id": state_id,
                         "landed_url": page.url,
                         "screenshot": state_screenshot_rel,
+                    }
+                )
+            except UnresolvedPlaceholderError as e:
+                console.print(f"    [red]State {state_id} unresolved: {e}[/red]")
+                state_screenshots.append(
+                    {
+                        "state_id": state_id,
+                        "landed_url": page.url,
+                        "screenshot": None,
+                        "error": f"Unresolved placeholder: {e}",
                     }
                 )
             except Exception as e:
