@@ -602,7 +602,7 @@ void main() {
   FigmaAuditBridge.install(
     appRouter,
     extraDecoders: {
-      'Course': (json) => Course.fromJson(json),
+      'Order': (json) => Order.fromJson(json),
       // One entry per type you pass as `extra`
     },
   );
