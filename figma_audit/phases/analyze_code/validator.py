@@ -143,9 +143,7 @@ def _check_literal_route_params(page: dict, pid: str, issues: list) -> None:
             )
 
 
-def _check_user_id_templates(
-    page: dict, pid: str, known_aliases: set[str], issues: list
-) -> None:
+def _check_user_id_templates(page: dict, pid: str, known_aliases: set[str], issues: list) -> None:
     seen: set[tuple[str, str]] = set()
     for step, source in _iter_url_steps(page):
         url = _extract_url(step)
