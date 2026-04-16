@@ -89,6 +89,70 @@ class TestConfigLoad:
         finally:
             del os.environ["MY_KEY"]
 
+    def test_load_from_yaml_string(self):
+        """The web dashboard passes ``project.config_yaml`` as a raw string
+        via ``config_yaml_content`` so test_setup and friends reach the
+        pipeline without touching the filesystem."""
+        content = (
+            "figma_url: https://www.figma.com/design/xyz/Test\n"
+            "analyze_mode: agentic\n"
+            "test_setup:\n"
+            "  accounts:\n"
+            "    buyer:\n"
+            "      email: buyer@example.com\n"
+            "      otp: '1234'\n"
+            "  default_viewer: buyer\n"
+        )
+        cfg = Config.load(config_yaml_content=content)
+        assert cfg.figma_file_key == "xyz"
+        assert cfg.analyze_mode == "agentic"
+        ts = cfg.test_setup_model()
+        assert "buyer" in ts.accounts
+        assert ts.default_viewer == "buyer"
+
+    def test_config_yaml_content_overrides_config_path(self):
+        """When both are provided, the raw string wins — the dashboard
+        case where the DB blob is the authoritative source."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump({"app_url": "https://from-file.example"}, f)
+            path = Path(f.name)
+        try:
+            cfg = Config.load(
+                config_path=path,
+                config_yaml_content="app_url: https://from-string.example\n",
+            )
+            assert cfg.app_url == "https://from-string.example"
+        finally:
+            path.unlink()
+
+    def test_explicit_overrides_beat_config_yaml_content(self):
+        """A web dispatcher overlays Project row fields on top of the YAML
+        so the UI stays the source of truth for them."""
+        content = (
+            "project: /from/yaml\n"
+            "figma_url: https://www.figma.com/design/yaml/Test\n"
+            "app_url: https://yaml.example\n"
+        )
+        cfg = Config.load(
+            config_yaml_content=content,
+            project="/from/override",
+            app_url="https://override.example",
+        )
+        assert cfg.project == "/from/override"
+        assert cfg.app_url == "https://override.example"
+        # Not overridden → comes from the YAML
+        assert cfg.figma_file_key == "yaml"
+
+    def test_none_config_yaml_content_falls_back_to_config_path(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump({"app_url": "https://from-file.example"}, f)
+            path = Path(f.name)
+        try:
+            cfg = Config.load(config_path=path, config_yaml_content=None)
+            assert cfg.app_url == "https://from-file.example"
+        finally:
+            path.unlink()
+
 
 class TestSeedAccount:
     def test_default_empty(self):

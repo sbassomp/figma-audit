@@ -352,10 +352,24 @@ class Config(BaseModel):
         )
 
     @staticmethod
-    def load(config_path: Path | None = None, **overrides: str | None) -> Config:
-        """Load config from YAML file, env vars, and CLI overrides."""
+    def load(
+        config_path: Path | None = None,
+        *,
+        config_yaml_content: str | None = None,
+        **overrides: str | None,
+    ) -> Config:
+        """Load config from YAML (file path or raw string), env vars, and CLI overrides.
+
+        ``config_yaml_content`` takes precedence over ``config_path`` when both
+        are provided. The web dashboard uses ``config_yaml_content`` to pass
+        the YAML blob stored in ``project.config_yaml`` without touching the
+        filesystem, so ``test_setup``, ``analyze_mode`` and every other
+        option the user configured through the UI reach the pipeline.
+        """
         data: dict = {}
-        if config_path and config_path.exists():
+        if config_yaml_content:
+            data = yaml.safe_load(config_yaml_content) or {}
+        elif config_path and config_path.exists():
             with open(config_path) as f:
                 data = yaml.safe_load(f) or {}
 

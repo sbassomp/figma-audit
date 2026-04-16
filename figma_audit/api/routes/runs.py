@@ -124,7 +124,15 @@ def _execute_run(project_id: int, run_id: int, from_phase: str | None) -> None:
         try:
             from figma_audit.config import Config
 
-            cfg = Config(
+            # Hydrate the full Config from ``project.config_yaml`` (stored
+            # when the project was created/edited in the web UI) so that
+            # ``test_setup``, ``analyze_mode``, ``analyze_model``,
+            # ``viewport``, ``seed_account`` and every other option reach
+            # the pipeline. The four project-level fields on the Project
+            # row are passed as explicit overrides so the UI remains the
+            # source of truth for them.
+            cfg = Config.load(
+                config_yaml_content=project.config_yaml,
                 project=project.project_path,
                 figma_url=project.figma_url,
                 app_url=project.app_url,
