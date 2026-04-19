@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.1] - 2026-04-19
+
+Maintenance release.
+
+- API: the JSON run dispatcher now hydrates `Config` from `project.config_yaml`, so runs started via the REST API see the same configuration as runs started from the CLI or web UI.
+- Docs: replaced the last `Course`/`MedCourses` reference in the README Flutter bridge example with the generic `Order` vocabulary used everywhere else.
+- Tooling: `scripts/sync_to_github.sh` runs gitleaks + token-pattern grep on the commit range, tracked files and `.git/config` before fast-forwarding the public GitHub mirror.
+- CI: ruff format fix on `validator.py`.
+
 ## [0.2.0] - 2026-04-16
 
 Second public release. The headline additions are **multi-actor test setups** (one audit can log in as several accounts and have them interact via API before capture), **stateful captures** (a single page can produce one screenshot per tab/filter/wizard step), and a much tighter **Flutter Web integration** path.
